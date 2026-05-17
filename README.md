@@ -19,6 +19,7 @@ Tired of API rate limits, expensive credits, and restrictive scraping policies f
 
 - **Local API Server (`--serve`)**: Instantly drop UltraSearch into any agent framework as a 1:1 replacement for external search APIs. 
 - **LLM-Dense Output (`--output-format=llm-dense`)**: Generates hyper-compressed, whitespace-stripped HTML/Text chunks specifically engineered to maximize your LLM's context window.
+- **Google AI Overview Extraction**: Natively extracts Google's new generative AI summaries as "Rank 0" results, feeding pristine AI-synthesized answers directly to your local agents.
 - **VS Code Extension Integration**: Includes a native VS Code wrapper (`vscode-ultrasearch/`) so AI assistants like Cursor or GitHub Copilot can directly command the engine to research the web.
 - **Automated Defensive Classification:** Intelligently probes targets and classifies them into 4 tiers (Static HTML, JS-Rendered, Bot-Protected, Login-Walled).
 - **Human-Mimicry Solvers:** Features a robust ML-trained trajectory generator that simulates human cursor movements and input latency to flawlessly bypass zero-click CAPTCHAs.
