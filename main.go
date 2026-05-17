@@ -72,7 +72,7 @@ const extractJS = `(maxResults) => {
 }`
 
 func init() {
-	err := solver.LoadTrajectories("trajectories.json")
+	err := solver.LoadTrajectories("solver/trajectories.json")
 	if err != nil {
 		log.Printf("⚠️ Could not load trajectories: %v", err)
 	}

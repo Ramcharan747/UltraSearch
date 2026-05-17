@@ -1,0 +1,12 @@
+# Binaries
+ultrasearch
+*.exe
+*.out
+
+# OS Files
+.DS_Store
+
+# Temporary files
+*.tmp
+ultra_results.json
+*_formatted.txt
