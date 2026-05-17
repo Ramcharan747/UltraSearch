@@ -31,8 +31,18 @@ type SearchResult struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
 	Snippet string `json:"snippet"`
-	Content string `json:"content,omitempty"`
-	Tier    int    `json:"tier,omitempty"`
+	Content string `json:"content"`
+	Tier    int    `json:"tier"` // 1=Static, 2=JSRender, 3=Stealth, 4=Login/Persistence
+}
+
+// TelemetryLog captures automated failure tracking during the testing week
+type TelemetryLog struct {
+	Timestamp   string `json:"timestamp"`
+	Query       string `json:"query"`
+	TargetURL   string `json:"target_url"`
+	Tier        int    `json:"tier"`
+	Status      string `json:"status"`
+	ContentLen  int    `json:"content_length"`
 }
 
 // SearchResponse represents the results for a single query
@@ -825,5 +835,37 @@ func runSearchPipeline(queries []string, maxResults int, numWorkers int, fetchCo
 	log.Printf("\n⚡ FINAL: %d/%d queries, %d URLs with content in %.1fs (%.1fs/query)",
 		successCount, len(queries), totalContent, elapsedTotal, elapsedTotal/float64(len(queries)))
 
+	// Automatically record telemetry for usage week analysis
+	writeTelemetryLog(responses)
+
 	return responses
+}
+
+func writeTelemetryLog(responses []SearchResponse) {
+	file, err := os.OpenFile("usage_telemetry.jsonl", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	
+	for _, resp := range responses {
+		for i, r := range resp.Results {
+			if i >= 5 { break }
+			
+			status := "SUCCESS"
+			if r.Content == "" && r.Tier >= 2 {
+				status = "FAILED"
+			}
+			
+			logEntry := TelemetryLog{
+				Timestamp:  time.Now().Format(time.RFC3339),
+				Query:      resp.Query,
+				TargetURL:  r.URL,
+				Tier:       r.Tier,
+				Status:     status,
+				ContentLen: len(r.Content),
+			}
+			json.NewEncoder(file).Encode(logEntry)
+		}
+	}
 }
