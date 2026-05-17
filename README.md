@@ -1,24 +1,27 @@
 <div align="center">
   <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Go_Logo_Blue.svg" alt="Golang" width="80"/>
   <h1>UltraSearch</h1>
-  <p><b>The Ultimate Stealth Scraping Engine & Search Pipeline</b></p>
+  <p><b>The Unrestricted Tavily Alternative for Local AI Agents</b></p>
   
   [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org)
   [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
   [![Stealth](https://img.shields.io/badge/Bypass-Cloudflare%20%7C%20DataDome-red.svg)](#stealth)
+  [![Agents](https://img.shields.io/badge/AI%20Agents-OpenClaw%20%7C%20AutoGPT-purple.svg)](#api)
 </div>
 
 <br/>
 
-**UltraSearch** is a high-throughput, horizontally-scaled data extraction pipeline written in Go. It acts as an autonomous intelligence engine capable of tearing through search engine results, classifying targets by their defensive capabilities, and seamlessly bypassing enterprise-grade bot protections (like Cloudflare Turnstile, DataDome, and perimeter logins) to extract pristine structured data.
+**UltraSearch** is a self-hosted, unrestricted web search and extraction engine designed specifically for **Agentic Workflows** (OpenClaw, AutoGPT, LangChain, Cursor). 
 
-## 🔥 Key Features
+Tired of API rate limits, expensive credits, and restrictive scraping policies from commercial tools like Tavily? UltraSearch runs entirely on your local machine, effortlessly bypassing enterprise-grade bot protections (Cloudflare Turnstile, DataDome) to feed raw, pristine, token-optimized data directly into your LLM's context window.
 
+## 🔥 Why UltraSearch?
+
+- **Local API Server (`--serve`)**: Instantly drop UltraSearch into any agent framework as a 1:1 replacement for external search APIs. 
+- **LLM-Dense Output (`--output-format=llm-dense`)**: Generates hyper-compressed, whitespace-stripped HTML/Text chunks specifically engineered to maximize your LLM's context window.
+- **VS Code Extension Integration**: Includes a native VS Code wrapper (`vscode-ultrasearch/`) so AI assistants like Cursor or GitHub Copilot can directly command the engine to research the web.
 - **Automated Defensive Classification:** Intelligently probes targets and classifies them into 4 tiers (Static HTML, JS-Rendered, Bot-Protected, Login-Walled).
-- **Domain Persistence (Silent Fetch):** Parks stealth browsers on protected domains to clear CAPTCHAs once, then utilizes background `fetch()` requests to instantly drain data from thousands of pages invisibly.
 - **Human-Mimicry Solvers:** Features a robust ML-trained trajectory generator that simulates human cursor movements and input latency to flawlessly bypass zero-click CAPTCHAs.
-- **Concurrent Processing:** Built on Go's lightning-fast concurrency model (`goroutines` + `sync.WaitGroup`) to process massive query lists simultaneously.
-- **AI-Ready Output:** Automatically sanitizes DOM structures using Readability heuristics, generating clean, token-optimized `.txt` and `.json` outputs perfect for LLM digestion.
 
 ---
 

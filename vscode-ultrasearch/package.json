@@ -1,0 +1,23 @@
+{
+  "name": "vscode-ultrasearch",
+  "displayName": "UltraSearch Web Intelligence",
+  "description": "Tavily Alternative: Unrestricted stealth web scraping and search engine for AI Agents",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ultrasearch.search",
+        "title": "UltraSearch: Web Search (For AI Context)"
+      }
+    ]
+  },
+  "activationEvents": []
+}

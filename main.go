@@ -7,8 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -541,8 +543,41 @@ func main() {
 	limitFlag := flag.Int("limit", 10, "Maximum search results to process per query")
 	workersFlag := flag.Int("workers", 5, "Number of concurrent workers")
 	contentFlag := flag.Bool("content", true, "Extract deep content from pages (if false, only returns snippets)")
+	serveFlag := flag.Bool("serve", false, "Start an HTTP API server for AI Agents")
+	portFlag := flag.String("port", "8080", "Port for the HTTP server")
+	formatFlag := flag.String("output-format", "json", "Output format (json, llm-dense)")
 	outputFlag := flag.String("output", "ultra_results.json", "Output JSON file path")
 	flag.Parse()
+
+	if *serveFlag {
+		log.Printf("🚀 Starting UltraSearch API Server on :%s", *portFlag)
+		http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+			query := r.URL.Query().Get("q")
+			if query == "" {
+				http.Error(w, "Missing 'q' parameter", http.StatusBadRequest)
+				return
+			}
+			
+			limit := 5
+			if l := r.URL.Query().Get("limit"); l != "" {
+				if parsed, err := strconv.Atoi(l); err == nil {
+					limit = parsed
+				}
+			}
+			
+			content := true
+			if c := r.URL.Query().Get("content"); c == "false" {
+				content = false
+			}
+
+			log.Printf("📡 API Request: q='%s' limit=%d content=%v", query, limit, content)
+			responses := runSearchPipeline([]string{query}, limit, *workersFlag, content)
+			
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(responses[0])
+		})
+		log.Fatal(http.ListenAndServe(":"+*portFlag, nil))
+	}
 
 	var queries []string
 	if *queryFlag != "" {
@@ -565,17 +600,51 @@ func main() {
 	}
 
 	if len(queries) == 0 {
-		log.Println("⚠️ No queries provided. Use --query or --bundle.")
+		log.Println("⚠️ No queries provided. Use --query, --bundle, or --serve.")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	maxResults := *limitFlag
-	numWorkers := *workersFlag
+	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v", *workersFlag, *contentFlag)
+	
+	responses := runSearchPipeline(queries, *limitFlag, *workersFlag, *contentFlag)
 
-	log.Printf("🚀 Starting UltraSearch with %d workers. Content Extraction: %v", numWorkers, *contentFlag)
-	log.Printf("🔍 Total Queries: %d", len(queries))
+	// Save Output
+	if *formatFlag == "llm-dense" {
+		denseOutput := formatLLMDense(responses)
+		_ = os.WriteFile(*outputFlag, []byte(denseOutput), 0644)
+		log.Printf("💾 Saved LLM-dense results to %s", *outputFlag)
+	} else {
+		file, _ := json.MarshalIndent(responses, "", "  ")
+		_ = os.WriteFile(*outputFlag, file, 0644)
+		log.Printf("💾 Saved JSON results to %s", *outputFlag)
+	}
+}
 
+func formatLLMDense(responses []SearchResponse) string {
+	var sb strings.Builder
+	for _, resp := range responses {
+		sb.WriteString("<SEARCH q=\"" + resp.Query + "\">\n")
+		if resp.Error != "" {
+			sb.WriteString("<ERR>" + resp.Error + "</ERR>\n")
+			continue
+		}
+		for _, r := range resp.Results {
+			sb.WriteString(fmt.Sprintf("<RES rank=\"%d\" url=\"%s\">\n", r.Rank, r.URL))
+			content := r.Content
+			if content == "" {
+				content = r.Snippet
+			}
+			// aggressively strip whitespace for tokens
+			content = strings.Join(strings.Fields(content), " ")
+			sb.WriteString(content + "\n</RES>\n")
+		}
+		sb.WriteString("</SEARCH>\n")
+	}
+	return sb.String()
+}
+
+func runSearchPipeline(queries []string, maxResults int, numWorkers int, fetchContent bool) []SearchResponse {
 	startTotal := time.Now()
 	
 	// Search allocator: headless for Google only
@@ -611,7 +680,7 @@ func main() {
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go worker(i, queriesChan, resultsChan, allocCtx, maxResults, *contentFlag, &wg)
+		go worker(i, queriesChan, resultsChan, allocCtx, maxResults, fetchContent, &wg)
 	}
 
 	for _, q := range queries {
@@ -637,7 +706,7 @@ func main() {
 	log.Printf("\n⚡ %d/%d queries in %.1fs", successCount, len(queries), elapsedSearch)
 
 	// === FINAL RETRY PASS: Collect all failed URLs and retry with fresh stealth ===
-	if *contentFlag {
+	if fetchContent {
 		type retryTarget struct {
 			queryIdx  int
 			resultIdx int
@@ -756,14 +825,5 @@ func main() {
 	log.Printf("\n⚡ FINAL: %d/%d queries, %d URLs with content in %.1fs (%.1fs/query)",
 		successCount, len(queries), totalContent, elapsedTotal, elapsedTotal/float64(len(queries)))
 
-	// Save JSON
-	file, _ := json.MarshalIndent(responses, "", "  ")
-	_ = os.WriteFile(*outputFlag, file, 0644)
-	log.Printf("💾 Saved results to %s", *outputFlag)
-	
-	// Save formatted text
-	outputTxtFile := strings.TrimSuffix(*outputFlag, ".json") + "_formatted.txt"
-	output := formatForAI(responses)
-	_ = os.WriteFile(outputTxtFile, []byte(output), 0644)
-	log.Printf("📄 Saved formatted text to %s", outputTxtFile)
+	return responses
 }
