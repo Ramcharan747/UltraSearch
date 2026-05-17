@@ -576,6 +576,7 @@ func main() {
 	limitFlag := flag.Int("limit", 10, "Maximum search results to process per query")
 	workersFlag := flag.Int("workers", 5, "Number of concurrent workers")
 	contentFlag := flag.Bool("content", true, "Extract deep content from pages (if false, only returns snippets)")
+	fastAIFlag := flag.Bool("fast-ai", false, "Fast AI Mode: Skips deep scraping and instantly returns the AI Overview and URLs")
 	serveFlag := flag.Bool("serve", false, "Start an HTTP API server for AI Agents")
 	portFlag := flag.String("port", "8080", "Port for the HTTP server")
 	formatFlag := flag.String("output-format", "json", "Output format (json, llm-dense)")
@@ -602,8 +603,11 @@ func main() {
 			if c := r.URL.Query().Get("content"); c == "false" {
 				content = false
 			}
+			if f := r.URL.Query().Get("fast_ai"); f == "true" {
+				content = false
+			}
 
-			log.Printf("📡 API Request: q='%s' limit=%d content=%v", query, limit, content)
+			log.Printf("📡 API Request: q='%s' limit=%d content=%v fast_ai=%v", query, limit, content, r.URL.Query().Get("fast_ai") == "true")
 			responses := runSearchPipeline([]string{query}, limit, *workersFlag, content)
 			
 			w.Header().Set("Content-Type", "application/json")
@@ -638,9 +642,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v", *workersFlag, *contentFlag)
+	fetchContent := *contentFlag
+	if *fastAIFlag {
+		fetchContent = false
+	}
+
+	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v (FastAI: %v)", *workersFlag, fetchContent, *fastAIFlag)
 	
-	responses := runSearchPipeline(queries, *limitFlag, *workersFlag, *contentFlag)
+	responses := runSearchPipeline(queries, *limitFlag, *workersFlag, fetchContent)
 
 	// Save Output
 	if *formatFlag == "llm-dense" {

@@ -16,6 +16,10 @@
       {
         "command": "ultrasearch.search",
         "title": "UltraSearch: Web Search (For AI Context)"
+      },
+      {
+        "command": "ultrasearch.fastSearch",
+        "title": "UltraSearch: Fast AI Overview (Skip Deep Scrape)"
       }
     ]
   },
