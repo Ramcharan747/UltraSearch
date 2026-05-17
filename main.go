@@ -54,6 +54,29 @@ type SearchResponse struct {
 
 const extractJS = `(maxResults) => {
     const out = [];
+
+    // Attempt to extract Google AI Overview (SGE) if present
+    const aiContainer = document.querySelector('.s7d4ef');
+    if (aiContainer) {
+        let aiText = '';
+        const paragraphs = aiContainer.querySelectorAll('div.n6owBd');
+        if (paragraphs.length > 0) {
+            for (const p of paragraphs) {
+                aiText += p.innerText + ' ';
+            }
+        } else {
+            aiText = aiContainer.innerText;
+        }
+        if (aiText.length > 30) {
+            out.push({ 
+                rank: 0, 
+                title: "✨ Google AI Overview", 
+                url: window.location.href, 
+                snippet: aiText.replace(/\n/g, ' ').substring(0, 3000).trim()
+            });
+        }
+    }
+
     const links = document.querySelectorAll('a h3');
     for (const h3 of links) {
         const a = h3.closest('a');
