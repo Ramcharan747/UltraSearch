@@ -17,9 +17,9 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/go-shiori/go-readability"
 	"go_search/solver"
@@ -67,12 +67,19 @@ const extractJS = `(maxResults) => {
         } else {
             aiText = aiContainer.innerText;
         }
-        if (aiText.length > 30) {
+        
+        aiText = aiText.replace(/\n/g, ' ').trim();
+        const lowerText = aiText.toLowerCase();
+        const isErrorText = lowerText.includes("not available for this search") || 
+                            lowerText.includes("can't generate") || 
+                            lowerText.includes("try again later");
+                            
+        if (aiText.length > 30 && !isErrorText) {
             out.push({ 
                 rank: 0, 
                 title: "✨ Google AI Overview", 
                 url: window.location.href, 
-                snippet: aiText.replace(/\n/g, ' ').substring(0, 3000).trim()
+                snippet: aiText.substring(0, 3000)
             });
         }
     }
@@ -109,6 +116,9 @@ func init() {
 	if err != nil {
 		log.Printf("⚠️ Could not load trajectories: %v", err)
 	}
+	ReplenishCallback = func() {
+		ReplenishSessionPool(5)
+	}
 }
 
 // ==================== EXTRACTION FUNCTIONS ====================
@@ -140,59 +150,222 @@ func extractText(html string) string {
 
 // ==================== WORKER ====================
 
-func worker(id int, queries <-chan string, results chan<- SearchResponse, searchAllocCtx context.Context, maxResults int, fetchContent bool, wg *sync.WaitGroup) {
+func worker(id int, queries <-chan string, results chan<- SearchResponse, searchBrowserCtx context.Context, maxResults int, fetchContent bool, showBrowser bool, headless bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 	httpClient := SharedHTTPClient()
 
 	for q := range queries {
 		start := time.Now()
 		
-		// --- PHASE 0: Google Search ---
-		ctx, cancel := chromedp.NewContext(searchAllocCtx)
-		ctx, cancelTimeout := context.WithTimeout(ctx, 25*time.Second)
-		
-		chromedp.ListenTarget(ctx, func(ev interface{}) {
-			switch ev := ev.(type) {
-			case *fetch.EventRequestPaused:
-				go func() {
-					c := chromedp.FromContext(ctx)
-					resType := ev.ResourceType
-					if resType == network.ResourceTypeImage || resType == network.ResourceTypeMedia || resType == network.ResourceTypeStylesheet || resType == network.ResourceTypeFont {
-						fetch.FailRequest(ev.RequestID, network.ErrorReasonFailed).Do(cdp.WithExecutor(ctx, c.Target))
-					} else {
-						fetch.ContinueRequest(ev.RequestID).Do(cdp.WithExecutor(ctx, c.Target))
-					}
-				}()
-			}
-		})
-
 		var res []SearchResult
-		var pageURL string
-		searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), maxResults+10)
+		var err error
 
-		err := chromedp.Run(ctx,
-			fetch.Enable(),
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				_, err := page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(ctx)
-				return err
-			}),
-			chromedp.Navigate(searchURL),
-			chromedp.Sleep(600*time.Millisecond), 
-			chromedp.Location(&pageURL),
-			chromedp.Evaluate(fmt.Sprintf("(%s)(%d)", extractJS, maxResults), &res),
-		)
+		// Attempt direct HTTP Search first to bypass browser completely (sub-500ms path)
+		res, err = runHTTPSearch(q, maxResults)
+		if err == nil && len(res) > 0 {
+			log.Printf("   🚀 W%d: '%s' -> Direct HTTP Search SUCCESS (Total = %v)", id, q, time.Since(start))
+			if !fetchContent {
+				results <- SearchResponse{Query: q, Results: res}
+				continue
+			}
+		} else {
+			log.Printf("   ⚠️ W%d: Direct HTTP Search failed or no config, falling back to browser search... (Error: %v)", id, q, err)
+			
+			// --- PHASE 0: Google Search (Browser Fallback / Sniffer) ---
+			tSetupStart := time.Now()
+			// Use separate browser context for isolation
+			ctx, cancel, tabErr := createIsolatedTab(searchBrowserCtx)
+			if tabErr != nil {
+				log.Printf("   ❌ W%d: Failed to spawn isolated browser tab: %v", id, tabErr)
+				results <- SearchResponse{Query: q, Error: tabErr.Error()}
+				continue
+			}
+			ctx, cancelTimeout := context.WithTimeout(ctx, 25*time.Second)
+			
+			var pageURL string
+			searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), maxResults+10)
 
-		cancelTimeout()
-		cancel()
+			var tSetup, tNavigate, tPoll, tEvaluate time.Duration
 
-		if err != nil {
-			log.Printf("   ❌ W%d: '%s' -> Error: %v", id, q, err)
-			results <- SearchResponse{Query: q, Error: err.Error()}
-			continue
-		} else if strings.Contains(strings.ToLower(pageURL), "sorry") {
-			log.Printf("   ⚠️ W%d: '%s' -> BLOCKED", id, q)
-			results <- SearchResponse{Query: q, Error: "blocked_by_captcha"}
-			continue
+			var capturedHeaders map[string]string
+			var captureMu sync.Mutex
+			chromedp.ListenTarget(ctx, func(ev interface{}) {
+				if ev, ok := ev.(*network.EventRequestWillBeSent); ok {
+					if strings.Contains(ev.Request.URL, "google.com/search") && ev.Request.Method == "GET" {
+						captureMu.Lock()
+						if capturedHeaders == nil {
+							capturedHeaders = make(map[string]string)
+							for k, v := range ev.Request.Headers {
+								if strVal, ok := v.(string); ok {
+									if strings.ToLower(k) != "cookie" {
+										capturedHeaders[k] = strVal
+									}
+								}
+							}
+						}
+						captureMu.Unlock()
+					}
+				}
+			})
+
+			var cookies []*network.Cookie
+			// 1. Initial setup
+			err = chromedp.Run(ctx,
+				chromedp.ActionFunc(func(ctx context.Context) error {
+					// Setup network block and stealth script
+					err := network.Enable().Do(ctx)
+					if err != nil {
+						return err
+					}
+					err = network.SetBlockedURLs().WithURLPatterns([]*network.BlockPattern{
+						{URLPattern: "*://*:*/*.css", Block: true},
+						{URLPattern: "*://*:*/*.woff", Block: true},
+						{URLPattern: "*://*:*/*.woff2", Block: true},
+						{URLPattern: "*://*:*/*.ttf", Block: true},
+						{URLPattern: "*://*:*/*.png", Block: true},
+						{URLPattern: "*://*:*/*.jpg", Block: true},
+						{URLPattern: "*://*:*/*.jpeg", Block: true},
+						{URLPattern: "*://*:*/*.gif", Block: true},
+						{URLPattern: "*://*:*/*.svg", Block: true},
+						{URLPattern: "*://*:*/*.mp4", Block: true},
+						{URLPattern: "*://*:*/*.webm", Block: true},
+						{URLPattern: "*://*/*analytics*", Block: true},
+						{URLPattern: "*://*/*doubleclick*", Block: true},
+					}).Do(ctx)
+					if err != nil {
+						return err
+					}
+					_, err = page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(ctx)
+					tSetup = time.Since(tSetupStart)
+					return err
+				}),
+			)
+
+			if err == nil {
+				// 2. Navigate
+				tNavigateStart := time.Now()
+				err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+					_, _, _, _, err := page.Navigate(searchURL).Do(ctx)
+					return err
+				}))
+				tNavigate = time.Since(tNavigateStart)
+			}
+
+			if err == nil {
+				// Check if browser got redirected to sorry page and solve CAPTCHA
+				var currentLoc string
+				_ = chromedp.Run(ctx, chromedp.Location(&currentLoc))
+				if strings.Contains(strings.ToLower(currentLoc), "sorry") {
+					log.Printf("   ⚠️ W%d: Browser fallback hit CAPTCHA, attempting to solve...", id)
+					solved, solveErr := solver.DefeatCaptcha(ctx, 200, 400)
+					if solveErr != nil {
+						log.Printf("   ❌ W%d: CAPTCHA solver error: %v", id, solveErr)
+					} else if solved {
+						log.Printf("   ✅ W%d: CAPTCHA solved, waiting for Google redirect...", id)
+						time.Sleep(2 * time.Second)
+					}
+				}
+			}
+
+			if err == nil {
+				// 3. Poll with retry
+				tPollStart := time.Now()
+				var pollErr error
+				for attempt := 1; attempt <= 5; attempt++ {
+					pollErr = chromedp.Run(ctx, chromedp.Poll(`(() => {
+						const aiContainer = document.querySelector('.s7d4ef');
+						if (aiContainer && aiContainer.querySelectorAll('div.n6owBd').length > 0) {
+							return true;
+						}
+						const results = document.querySelectorAll('a h3');
+						if (results.length > 0) {
+							if (!window._firstResultSeenTime) {
+								window._firstResultSeenTime = Date.now();
+							}
+							if (Date.now() - window._firstResultSeenTime > 400) {
+								return true;
+							}
+						}
+						return false;
+					})()`, nil, chromedp.WithPollingInterval(50*time.Millisecond)))
+					
+					if pollErr == nil {
+						break
+					}
+					if strings.Contains(pollErr.Error(), "navigated or closed") {
+						log.Printf("   ⚠️ W%d: Poll attempt %d failed due to navigation/closed context, retrying...", id, attempt)
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					break
+				}
+				tPoll = time.Since(tPollStart)
+				if pollErr != nil {
+					err = pollErr
+				}
+			}
+
+			if err == nil {
+				// 4. Extract and retrieve cookies with retry
+				var evalErr error
+				for attempt := 1; attempt <= 3; attempt++ {
+					tEvaluateStart := time.Now()
+					evalErr = chromedp.Run(ctx,
+						chromedp.ActionFunc(func(ctx context.Context) error {
+							err := chromedp.Location(&pageURL).Do(ctx)
+							if err != nil {
+								return err
+							}
+							err = chromedp.Evaluate(fmt.Sprintf("(%s)(%d)", extractJS, maxResults), &res).Do(ctx)
+							return err
+						}),
+						chromedp.ActionFunc(func(ctx context.Context) error {
+							var err error
+							cookies, err = network.GetCookies().WithURLs([]string{"https://www.google.com"}).Do(ctx)
+							return err
+						}),
+					)
+					tEvaluate = time.Since(tEvaluateStart)
+					if evalErr == nil {
+						break
+					}
+					if strings.Contains(evalErr.Error(), "navigated or closed") {
+						log.Printf("   ⚠️ W%d: Evaluate attempt %d failed due to navigation/closed context, retrying...", id, attempt)
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					break
+				}
+				if evalErr != nil {
+					err = evalErr
+				}
+			}
+
+			log.Printf("⏱️ W%d Timings: Setup/Init Context = %v | page.Navigate = %v | DOM Polling = %v | JS Evaluate = %v",
+				id, tSetup, tNavigate, tPoll, tEvaluate)
+
+			cancelTimeout()
+			cancel()
+
+			if err == nil && len(capturedHeaders) > 0 && len(cookies) > 0 {
+				saveSessionConfig(capturedHeaders, cookies)
+			}
+
+			if err != nil {
+				log.Printf("   ❌ W%d: '%s' -> Error: %v", id, q, err)
+				results <- SearchResponse{Query: q, Error: err.Error()}
+				continue
+			} else if strings.Contains(strings.ToLower(pageURL), "sorry") {
+				log.Printf("   ⚠️ W%d: '%s' -> BLOCKED", id, q)
+				results <- SearchResponse{Query: q, Error: "blocked_by_captcha"}
+				continue
+			}
+
+			if !fetchContent {
+				log.Printf("   ✅ W%d: '%s' -> %d results (content skipped)", id, q, len(res))
+				results <- SearchResponse{Query: q, Results: res}
+				continue
+			}
 		}
 
 		// --- PHASE 1: CLASSIFY all URLs ---
@@ -254,11 +427,6 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		log.Printf("   📊 W%d: Classified %d URLs → T1:%d T2:%d T3:%d T4:%d",
 			id, deepLimit, len(t1Results), len(t2Idxs), len(t3Idxs), len(t4Idxs))
 
-		if !fetchContent {
-			log.Printf("   ✅ W%d: '%s' -> %d results (content skipped)", id, q, len(res))
-			results <- SearchResponse{Query: q, Results: res}
-			continue
-		}
 
 		// --- PHASE 2: EXTRACT T1 (instant, already have HTML) ---
 		for _, cu := range t1Results {
@@ -354,7 +522,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 			stealthOpts := []chromedp.ExecAllocatorOption{
 				chromedp.NoFirstRun,
 				chromedp.NoDefaultBrowserCheck,
-				chromedp.Flag("headless", false),
+				chromedp.Flag("headless", headless),
 				chromedp.Flag("enable-automation", false),
 				chromedp.Flag("disable-blink-features", "AutomationControlled"),
 				chromedp.Flag("disable-infobars", true),
@@ -364,6 +532,9 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
 				chromedp.WindowSize(1440, 900),
 				chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+			}
+			if !showBrowser && !headless {
+				stealthOpts = append(stealthOpts, chromedp.Flag("window-position", "-2400,-2400"))
 			}
 
 			stealthAlloc, stealthAllocCancel := chromedp.NewExecAllocator(context.Background(), stealthOpts...)
@@ -577,14 +748,62 @@ func main() {
 	workersFlag := flag.Int("workers", 5, "Number of concurrent workers")
 	contentFlag := flag.Bool("content", true, "Extract deep content from pages (if false, only returns snippets)")
 	fastAIFlag := flag.Bool("fast-ai", false, "Fast AI Mode: Skips deep scraping and instantly returns the AI Overview and URLs")
+	showBrowserFlag := flag.Bool("show-browser", false, "Show browser GUI visually on-screen during stealth operations (default: false)")
+	headlessFlag := flag.Bool("headless", false, "Run stealth browsers in real headless mode instead of headful-offscreen")
 	serveFlag := flag.Bool("serve", false, "Start an HTTP API server for AI Agents")
 	portFlag := flag.String("port", "8080", "Port for the HTTP server")
 	formatFlag := flag.String("output-format", "json", "Output format (json, llm-dense)")
 	outputFlag := flag.String("output", "ultra_results.json", "Output JSON file path")
+	
+	stressFlag := flag.Bool("stress", false, "Run stress test suite")
+	stressCountFlag := flag.Int("stress-count", 30, "Total number of queries to run in stress test")
+	stressConcurrencyFlag := flag.Int("stress-concurrency", 2, "Concurrency level for stress test")
+	stressDelayFlag := flag.Int("stress-delay", 500, "Delay in milliseconds between queries in each worker")
+	stressSelfHealFlag := flag.Bool("stress-self-heal", true, "Trigger self-healing browser fallback when captcha blocked")
+	
 	flag.Parse()
+
+	// Proactively pre-fill the session pool at startup if we have fewer than 5 active sessions
+	if poolManager.ActiveCount() < 5 {
+		log.Println("🔑 [Session Pool] Startup pool count low. Pre-filling session pool...")
+		ReplenishSessionPool(5)
+	}
+
+	if *stressFlag {
+		runStressTest(*stressCountFlag, *stressConcurrencyFlag, *stressDelayFlag, *stressSelfHealFlag, *limitFlag, *showBrowserFlag, *headlessFlag)
+		return
+	}
 
 	if *serveFlag {
 		log.Printf("🚀 Starting UltraSearch API Server on :%s", *portFlag)
+		
+		opts := []chromedp.ExecAllocatorOption{
+			chromedp.NoFirstRun,
+			chromedp.NoDefaultBrowserCheck,
+			chromedp.Flag("headless", true),
+			chromedp.Flag("enable-automation", false),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+			chromedp.Flag("disable-infobars", true),
+			chromedp.Flag("disable-gpu", true),
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("no-sandbox", true),
+			chromedp.Flag("disable-extensions", false),
+			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+			chromedp.Flag("blink-settings", "imagesEnabled=false"),
+			chromedp.WindowSize(1440, 900),
+			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+		}
+
+		allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+		defer cancelAlloc()
+		
+		browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
+		defer cancelBrowser()
+		
+		if err := chromedp.Run(browserCtx); err != nil {
+			log.Fatalf("Failed to start persistent browser: %v", err)
+		}
+
 		http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 			query := r.URL.Query().Get("q")
 			if query == "" {
@@ -599,19 +818,26 @@ func main() {
 				}
 			}
 			
-			content := true
+			content := *contentFlag
 			if c := r.URL.Query().Get("content"); c == "false" {
 				content = false
 			}
-			if f := r.URL.Query().Get("fast_ai"); f == "true" {
+			if f := r.URL.Query().Get("fast_ai"); f == "true" || r.URL.Query().Get("fast-ai") == "true" {
+				content = false
+			}
+			if *fastAIFlag {
 				content = false
 			}
 
-			log.Printf("📡 API Request: q='%s' limit=%d content=%v fast_ai=%v", query, limit, content, r.URL.Query().Get("fast_ai") == "true")
-			responses := runSearchPipeline([]string{query}, limit, *workersFlag, content)
+			log.Printf("📡 API Request: q='%s' limit=%d content=%v showBrowser=%v headless=%v", query, limit, content, *showBrowserFlag, *headlessFlag)
+			responses := runSearchPipeline(browserCtx, []string{query}, limit, *workersFlag, content, *showBrowserFlag, *headlessFlag)
 			
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(responses[0])
+			if len(responses) > 0 {
+				json.NewEncoder(w).Encode(responses[0])
+			} else {
+				json.NewEncoder(w).Encode(SearchResponse{Query: query, Error: "no results"})
+			}
 		})
 		log.Fatal(http.ListenAndServe(":"+*portFlag, nil))
 	}
@@ -648,8 +874,7 @@ func main() {
 	}
 
 	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v (FastAI: %v)", *workersFlag, fetchContent, *fastAIFlag)
-	
-	responses := runSearchPipeline(queries, *limitFlag, *workersFlag, fetchContent)
+		responses := runSearchPipeline(nil, queries, *limitFlag, *workersFlag, fetchContent, *showBrowserFlag, *headlessFlag)
 
 	// Save Output
 	if *formatFlag == "llm-dense" {
@@ -685,35 +910,46 @@ func formatLLMDense(responses []SearchResponse) string {
 	}
 	return sb.String()
 }
-
-func runSearchPipeline(queries []string, maxResults int, numWorkers int, fetchContent bool) []SearchResponse {
+func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxResults int, numWorkers int, fetchContent bool, showBrowser bool, headless bool) []SearchResponse {
 	startTotal := time.Now()
-	
-	// Search allocator: headless for Google only
-	opts := []chromedp.ExecAllocatorOption{
-		chromedp.NoFirstRun,
-		chromedp.NoDefaultBrowserCheck,
-		chromedp.Flag("headless", true),
-		chromedp.Flag("enable-automation", false),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-		chromedp.Flag("disable-infobars", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-extensions", false),
-		chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
-		chromedp.WindowSize(1440, 900),
-		chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+
+	var browserCtx context.Context
+	var cancelBrowser context.CancelFunc
+	var allocCtx context.Context
+	var cancelAlloc context.CancelFunc
+
+	if sharedBrowserCtx != nil {
+		browserCtx = sharedBrowserCtx
+	} else {
+		// Search allocator: headless for Google only
+		opts := []chromedp.ExecAllocatorOption{
+			chromedp.NoFirstRun,
+			chromedp.NoDefaultBrowserCheck,
+			chromedp.Flag("headless", true),
+			chromedp.Flag("enable-automation", false),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+			chromedp.Flag("disable-infobars", true),
+			chromedp.Flag("disable-gpu", true),
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("no-sandbox", true),
+			chromedp.Flag("disable-extensions", false),
+			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+			chromedp.Flag("blink-settings", "imagesEnabled=false"), // natively block images
+			chromedp.WindowSize(1440, 900),
+			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+		}
+
+		allocCtx, cancelAlloc = chromedp.NewExecAllocator(context.Background(), opts...)
+		browserCtx, cancelBrowser = chromedp.NewContext(allocCtx)
+		if err := chromedp.Run(browserCtx); err != nil {
+			log.Fatalf("Failed to start browser: %v", err)
+		}
 	}
-
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancelAlloc()
-
-	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
-	defer cancelBrowser()
-	
-	if err := chromedp.Run(browserCtx); err != nil {
-		log.Fatalf("Failed to start browser: %v", err)
+	if cancelBrowser != nil {
+		defer cancelBrowser()
+	}
+	if cancelAlloc != nil {
+		defer cancelAlloc()
 	}
 
 	queriesChan := make(chan string, len(queries))
@@ -722,7 +958,7 @@ func runSearchPipeline(queries []string, maxResults int, numWorkers int, fetchCo
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go worker(i, queriesChan, resultsChan, allocCtx, maxResults, fetchContent, &wg)
+		go worker(i, queriesChan, resultsChan, browserCtx, maxResults, fetchContent, showBrowser, headless, &wg)
 	}
 
 	for _, q := range queries {
@@ -770,7 +1006,7 @@ func runSearchPipeline(queries []string, maxResults int, numWorkers int, fetchCo
 			retryOpts := []chromedp.ExecAllocatorOption{
 				chromedp.NoFirstRun,
 				chromedp.NoDefaultBrowserCheck,
-				chromedp.Flag("headless", false),
+				chromedp.Flag("headless", headless),
 				chromedp.Flag("enable-automation", false),
 				chromedp.Flag("disable-blink-features", "AutomationControlled"),
 				chromedp.Flag("disable-infobars", true),
@@ -780,6 +1016,9 @@ func runSearchPipeline(queries []string, maxResults int, numWorkers int, fetchCo
 				chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
 				chromedp.WindowSize(1440, 900),
 				chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+			}
+			if !showBrowser && !headless {
+				retryOpts = append(retryOpts, chromedp.Flag("window-position", "-2400,-2400"))
 			}
 
 			retryAlloc, retryAllocCancel := chromedp.NewExecAllocator(context.Background(), retryOpts...)
@@ -901,3 +1140,550 @@ func writeTelemetryLog(responses []SearchResponse) {
 		}
 	}
 }
+
+func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit int, showBrowser bool, headless bool) {
+	log.Printf("🔥 STARTING STRESS TEST: count=%d, concurrency=%d, delay=%dms, selfHeal=%v", count, concurrency, delayMs, selfHeal)
+
+	// Build a pool of different queries to rotate through
+	baseQueries := []string{
+		"what is quantum computing",
+		"how does photosynthesis work",
+		"history of the internet",
+		"why is the sky blue",
+		"largest ocean in the world",
+		"how to learn go programming",
+		"speed of light in mph",
+		"capital of australia",
+		"what is the theory of relativity",
+		"how do airplanes fly",
+		"definition of artificial intelligence",
+		"who wrote hamlet",
+		"origin of the word algorithm",
+		"distance from earth to moon",
+		"average height of mount everest",
+		"benefits of regular exercise",
+		"symptoms of common cold",
+		"how to cook pasta",
+		"what is the water cycle",
+		"invention of the telephone",
+		"how many countries in europe",
+		"what is photosynthesis",
+		"structure of an atom",
+		"how is cheese made",
+		"deepest lake in the world",
+		"who discovered gravity",
+		"what is the speed of sound",
+		"tallest building in the world",
+		"how does a battery work",
+		"what is black hole",
+	}
+
+	queries := make([]string, count)
+	for i := 0; i < count; i++ {
+		queries[i] = baseQueries[i%len(baseQueries)]
+	}
+
+	// Stats tracking
+	var successCount int64
+	var captchaCount int64
+	var errorCount int64
+	var healTriggerCount int64
+	var totalDuration int64 // in ms
+	var statsMu sync.Mutex
+
+	type RequestResult struct {
+		Index    int
+		Query    string
+		Status   string // "SUCCESS", "CAPTCHA_BLOCKED", "ERROR"
+		Duration time.Duration
+		Healed   bool
+	}
+	var results []RequestResult
+	var resultsMu sync.Mutex
+
+	// We need a browser context for the fallback/self-healing.
+	var browserCtx context.Context
+	var cancelBrowser context.CancelFunc
+	var allocCtx context.Context
+	var cancelAlloc context.CancelFunc
+
+	if selfHeal {
+		opts := []chromedp.ExecAllocatorOption{
+			chromedp.NoFirstRun,
+			chromedp.NoDefaultBrowserCheck,
+			chromedp.Flag("headless", true),
+			chromedp.Flag("enable-automation", false),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+			chromedp.Flag("disable-infobars", true),
+			chromedp.Flag("disable-gpu", true),
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("no-sandbox", true),
+			chromedp.Flag("disable-extensions", false),
+			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+			chromedp.Flag("blink-settings", "imagesEnabled=false"),
+			chromedp.WindowSize(1440, 900),
+			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+		}
+		allocCtx, cancelAlloc = chromedp.NewExecAllocator(context.Background(), opts...)
+		browserCtx, cancelBrowser = chromedp.NewContext(allocCtx)
+		// Start browser
+		if err := chromedp.Run(browserCtx); err != nil {
+			log.Fatalf("Failed to start browser for self-healing: %v", err)
+		}
+		defer cancelBrowser()
+		defer cancelAlloc()
+	}
+
+	queriesChan := make(chan int, count)
+	for i := 0; i < count; i++ {
+		queriesChan <- i
+	}
+	close(queriesChan)
+
+	var wg sync.WaitGroup
+	var healMu sync.Mutex
+	var lastHealTime time.Time
+
+	for w := 0; w < concurrency; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for idx := range queriesChan {
+				q := queries[idx]
+				start := time.Now()
+				
+				log.Printf("🔄 [W%d] Req %d/%d: Querying '%s' via direct HTTP...", workerID, idx+1, count, q)
+				
+				// Try direct HTTP Search
+				httpRes, err := runHTTPSearch(q, limit)
+				
+				status := "SUCCESS"
+				healed := false
+				
+				if err != nil {
+					log.Printf("⚠️ [W%d] Req %d/%d: HTTP Search failed: %v", workerID, idx+1, count, err)
+					
+					isCaptcha := strings.Contains(err.Error(), "blocked by captcha") || strings.Contains(err.Error(), "status 429")
+					
+					if isCaptcha && selfHeal {
+						status = "CAPTCHA_BLOCKED"
+						
+						// Trigger self-healing: fallback to browser search
+						healMu.Lock()
+						// Check if another worker just healed it recently (within 5 seconds) to avoid redundant browser launches
+						if time.Since(lastHealTime) > 5*time.Second {
+							log.Printf("🛡️ [W%d] CAPTCHA detected. Triggering browser fallback to self-heal...", workerID)
+							statsMu.Lock()
+							healTriggerCount++
+							statsMu.Unlock()
+							
+							// Run search through browser fallback (Phase 0) to capture fresh headers/cookies
+							ctx, cancel := chromedp.NewContext(browserCtx)
+							ctx, cancelTimeout := context.WithTimeout(ctx, 25*time.Second)
+							
+							searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), limit+10)
+							
+							var pageURL string
+							var res []SearchResult
+							var capturedHeaders map[string]string
+							var captureMu sync.Mutex
+							var cookies []*network.Cookie
+							
+							chromedp.ListenTarget(ctx, func(ev interface{}) {
+								if ev, ok := ev.(*network.EventRequestWillBeSent); ok {
+									if strings.Contains(ev.Request.URL, "google.com/search") && ev.Request.Method == "GET" {
+										captureMu.Lock()
+										if capturedHeaders == nil {
+											capturedHeaders = make(map[string]string)
+											for k, v := range ev.Request.Headers {
+												if strVal, ok := v.(string); ok {
+													if strings.ToLower(k) != "cookie" {
+														capturedHeaders[k] = strVal
+													}
+												}
+											}
+										}
+										captureMu.Unlock()
+									}
+								}
+							})
+
+							runErr := chromedp.Run(ctx,
+								chromedp.ActionFunc(func(ctx context.Context) error {
+									err := network.Enable().Do(ctx)
+									if err != nil {
+										return err
+									}
+									_, err = page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(ctx)
+									return err
+								}),
+							)
+
+							if runErr == nil {
+								runErr = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+									_, _, _, _, err := page.Navigate(searchURL).Do(ctx)
+									return err
+								}))
+							}
+
+							if runErr == nil {
+								// Check for sorry page redirect
+								chromedp.Run(ctx, chromedp.Location(&pageURL))
+								if strings.Contains(strings.ToLower(pageURL), "sorry") {
+									log.Printf("   ⚠️ [W%d] Browser Fallback hit CAPTCHA, attempting to solve...", workerID)
+									solved, solveErr := solver.DefeatCaptcha(ctx, 200, 400)
+									if solveErr != nil {
+										log.Printf("   ❌ CAPTCHA solver error: %v", solveErr)
+									} else if solved {
+										log.Printf("   ✅ CAPTCHA solved, waiting for Google redirect...")
+										time.Sleep(2 * time.Second)
+									}
+								}
+							}
+
+							if runErr == nil {
+								// Poll for results
+								runErr = chromedp.Run(ctx, chromedp.Poll(`(() => {
+									const results = document.querySelectorAll('a h3');
+									return results.length > 0;
+								})()`, nil, chromedp.WithPollingInterval(100*time.Millisecond)))
+							}
+
+							if runErr == nil {
+								// Extract details and cookies
+								runErr = chromedp.Run(ctx,
+									chromedp.ActionFunc(func(ctx context.Context) error {
+										err := chromedp.Location(&pageURL).Do(ctx)
+										if err != nil {
+											return err
+										}
+										err = chromedp.Evaluate(fmt.Sprintf("(%s)(%d)", extractJS, limit), &res).Do(ctx)
+										return err
+									}),
+									chromedp.ActionFunc(func(ctx context.Context) error {
+										var err error
+										cookies, err = network.GetCookies().WithURLs([]string{"https://www.google.com"}).Do(ctx)
+										return err
+									}),
+								)
+							}
+
+							cancelTimeout()
+							cancel()
+
+							if runErr == nil && len(capturedHeaders) > 0 && len(cookies) > 0 {
+								saveSessionConfig(capturedHeaders, cookies)
+								lastHealTime = time.Now()
+								healed = true
+								log.Printf("✅ [W%d] Self-healing SUCCESS: Fresh cookies loaded and saved. Retrying HTTP search...", workerID)
+								
+								// Retry the direct HTTP search once with fresh config
+								retryRes, retryErr := runHTTPSearch(q, limit)
+								if retryErr == nil {
+									status = "SUCCESS"
+									httpRes = retryRes
+									log.Printf("🎉 [W%d] Retry SUCCESS: HTTP request recovered after healing!", workerID)
+								} else {
+									log.Printf("❌ [W%d] Retry FAILED after healing: %v", workerID, retryErr)
+									status = "ERROR"
+								}
+							} else {
+								log.Printf("❌ [W%d] Self-healing FAILED: Browser search error: %v", workerID, runErr)
+								status = "ERROR"
+							}
+						} else {
+							// Another worker recently healed, so we reload config and retry direct HTTP search
+							log.Printf("🛡️ [W%d] CAPTCHA detected. Another worker recently self-healed, reloading session config...", workerID)
+							loadSessionConfig()
+							retryRes, retryErr := runHTTPSearch(q, limit)
+							if retryErr == nil {
+								status = "SUCCESS"
+								httpRes = retryRes
+								healed = true
+								log.Printf("🎉 [W%d] Retry SUCCESS: Recovered using session from other worker!", workerID)
+							} else {
+								log.Printf("❌ [W%d] Retry FAILED after session reload: %v", workerID, retryErr)
+								status = "ERROR"
+							}
+						}
+						healMu.Unlock()
+					} else {
+						status = "ERROR"
+					}
+				}
+
+				dur := time.Since(start)
+				
+				statsMu.Lock()
+				if status == "SUCCESS" {
+					successCount++
+					totalDuration += dur.Milliseconds()
+				} else if status == "CAPTCHA_BLOCKED" {
+					captchaCount++
+				} else {
+					errorCount++
+				}
+				statsMu.Unlock()
+
+				resultsMu.Lock()
+				results = append(results, RequestResult{
+					Index:    idx,
+					Query:    q,
+					Status:   status,
+					Duration: dur,
+					Healed:   healed,
+				})
+				resultsMu.Unlock()
+
+				log.Printf("📊 [W%d] Req %d/%d Done. Status: %s | Dur: %v | SGE: %v", workerID, idx+1, count, status, dur, len(httpRes) > 0 && httpRes[0].Rank == 0)
+
+				if delayMs > 0 {
+					time.Sleep(time.Duration(delayMs) * time.Millisecond)
+				}
+			}
+		}(w)
+	}
+
+	wg.Wait()
+
+	// Print summary stats
+	log.Println(strings.Repeat("=", 60))
+	log.Println("🏁 STRESS TEST RESULTS:")
+	log.Println(strings.Repeat("=", 60))
+	log.Printf("Total Queries Executed:   %d", count)
+	log.Printf("Successful Requests:      %d (%.1f%%)", successCount, float64(successCount)/float64(count)*100)
+	log.Printf("Captcha Blocks (Total):   %d (%.1f%%)", captchaCount, float64(captchaCount)/float64(count)*100)
+	log.Printf("Connection/Other Errors:  %d (%.1f%%)", errorCount, float64(errorCount)/float64(count)*100)
+	log.Printf("Self-Healing Triggers:    %d", healTriggerCount)
+	if successCount > 0 {
+		log.Printf("Average Latency (Success): %v", time.Duration(totalDuration/successCount)*time.Millisecond)
+	}
+	log.Println(strings.Repeat("-", 60))
+	log.Println("Detailed Timeline:")
+	for _, r := range results {
+		healStr := ""
+		if r.Healed {
+			healStr = " (Healed)"
+		}
+		log.Printf("  #%-3d: %-35q | Status: %-15s | Latency: %-8v%s", r.Index+1, r.Query, r.Status, r.Duration, healStr)
+	}
+	log.Println(strings.Repeat("=", 60))
+}
+
+var (
+	globalBrowserCtx    context.Context
+	globalBrowserCancel context.CancelFunc
+	globalAllocCtx      context.Context
+	globalAllocCancel   context.CancelFunc
+	globalBrowserOnce   sync.Once
+	replenishMu         sync.Mutex
+	isReplenishing      bool
+)
+
+func GetGlobalBrowserCtx() context.Context {
+	globalBrowserOnce.Do(func() {
+		opts := []chromedp.ExecAllocatorOption{
+			chromedp.NoFirstRun,
+			chromedp.NoDefaultBrowserCheck,
+			chromedp.Flag("headless", true),
+			chromedp.Flag("enable-automation", false),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+			chromedp.Flag("disable-infobars", true),
+			chromedp.Flag("disable-gpu", true),
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("no-sandbox", true),
+			chromedp.Flag("disable-extensions", false),
+			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+			chromedp.Flag("blink-settings", "imagesEnabled=false"),
+			chromedp.WindowSize(1440, 900),
+			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+		}
+		globalAllocCtx, globalAllocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
+		globalBrowserCtx, globalBrowserCancel = chromedp.NewContext(globalAllocCtx)
+		if err := chromedp.Run(globalBrowserCtx); err != nil {
+			log.Printf("⚠️ Failed to start global browser context: %v", err)
+		} else {
+			log.Println("🌐 [Global Browser] Started global browser context successfully.")
+		}
+	})
+	return globalBrowserCtx
+}
+
+func ReplenishSessionPool(targetCount int) {
+	replenishMu.Lock()
+	if isReplenishing {
+		replenishMu.Unlock()
+		return
+	}
+	isReplenishing = true
+	replenishMu.Unlock()
+
+	defer func() {
+		replenishMu.Lock()
+		isReplenishing = false
+		replenishMu.Unlock()
+	}()
+
+	active := poolManager.ActiveCount()
+	if active >= targetCount {
+		return
+	}
+
+	needed := targetCount - active
+	if needed > 5 {
+		needed = 5 // limit concurrency to 5 max
+	}
+
+	log.Printf("🔄 [Session Pool] Replenishing session pool: active=%d, target=%d, launching %d parallel browsers...", active, targetCount, needed)
+
+	parentCtx := GetGlobalBrowserCtx()
+	if parentCtx == nil {
+		log.Println("❌ [Session Pool] Cannot replenish, global browser context is nil.")
+		return
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < needed; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			
+			log.Printf("🔑 [Replenish W%d] Spawning isolated browser tab...", workerID)
+			ctx, cancel, tabErr := createIsolatedTab(parentCtx)
+			if tabErr != nil {
+				log.Printf("❌ [Replenish W%d] Failed to spawn isolated browser tab: %v", workerID, tabErr)
+				return
+			}
+			ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
+			defer cancelTimeout()
+			defer cancel()
+
+			replenishQueries := []string{
+				"weather today",
+				"local news",
+				"what time is it",
+				"google translate",
+				"calculator",
+				"map of new york",
+				"stock market today",
+				"world news",
+				"dictionary",
+				"internet speed test",
+			}
+			qIdx := (int(time.Now().UnixNano()) + workerID) % len(replenishQueries)
+			if qIdx < 0 {
+				qIdx = -qIdx
+			}
+			q := replenishQueries[qIdx]
+			searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en", url.QueryEscape(q))
+			var pageURL string
+			var capturedHeaders map[string]string
+			var captureMu sync.Mutex
+			var cookies []*network.Cookie
+
+			chromedp.ListenTarget(ctx, func(ev interface{}) {
+				if ev, ok := ev.(*network.EventRequestWillBeSent); ok {
+					if strings.Contains(ev.Request.URL, "google.com/search") && ev.Request.Method == "GET" {
+						captureMu.Lock()
+						if capturedHeaders == nil {
+							capturedHeaders = make(map[string]string)
+							for k, v := range ev.Request.Headers {
+								if strVal, ok := v.(string); ok {
+									if strings.ToLower(k) != "cookie" {
+										capturedHeaders[k] = strVal
+									}
+								}
+							}
+						}
+						captureMu.Unlock()
+					}
+				}
+			})
+
+			// Run the pre-fetch sequence
+			err := chromedp.Run(ctx,
+				chromedp.ActionFunc(func(c context.Context) error {
+					err := network.Enable().Do(c)
+					if err != nil {
+						return err
+					}
+					_, err = page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(c)
+					return err
+				}),
+				chromedp.Navigate(searchURL),
+				chromedp.Location(&pageURL),
+			)
+
+			if err == nil && strings.Contains(strings.ToLower(pageURL), "sorry") {
+				log.Printf("⚠️ [Replenish W%d] Encountered CAPTCHA, attempting to solve...", workerID)
+				solved, solveErr := solver.DefeatCaptcha(ctx, 200, 400)
+				if solveErr != nil {
+					log.Printf("❌ [Replenish W%d] CAPTCHA solve error: %v", workerID, solveErr)
+				} else if solved {
+					log.Printf("✅ [Replenish W%d] CAPTCHA solved, waiting...", workerID)
+					time.Sleep(2 * time.Second)
+					chromedp.Run(ctx, chromedp.Location(&pageURL))
+				}
+			}
+
+			if err == nil {
+				// Poll to verify search results exist
+				err = chromedp.Run(ctx, chromedp.Poll(`(() => {
+					return document.querySelectorAll('a h3').length > 0;
+				})()`, nil, chromedp.WithPollingInterval(100*time.Millisecond)))
+			}
+
+			if err == nil {
+				// Extract cookies
+				err = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+					var err error
+					cookies, err = network.GetCookies().WithURLs([]string{"https://www.google.com"}).Do(c)
+					return err
+				}))
+			}
+
+			if err == nil && len(capturedHeaders) > 0 && len(cookies) > 0 {
+				sessionID := poolManager.AddSession(capturedHeaders, cookies)
+				log.Printf("🎉 [Replenish W%d] Successfully captured and added session %s", workerID, sessionID)
+			} else {
+				log.Printf("❌ [Replenish W%d] Failed to capture session: err=%v, headers=%d, cookies=%d", 
+					workerID, err, len(capturedHeaders), len(cookies))
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	log.Printf("🔄 [Session Pool] Replenishment complete. Active session count: %d", poolManager.ActiveCount())
+}
+
+// createIsolatedTab spawns a completely isolated browser context (incognito profile)
+// and creates a new window in it, returning a chromedp context attached to the new target.
+// This bypasses the CDP -32000 "Failed to open new tab - no browser is open" error in headless mode.
+func createIsolatedTab(parentCtx context.Context) (context.Context, context.CancelFunc, error) {
+	var browserContextID cdp.BrowserContextID
+	err := chromedp.Run(parentCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var err error
+		browserContextID, err = target.CreateBrowserContext().Do(cdp.WithExecutor(ctx, chromedp.FromContext(parentCtx).Browser))
+		return err
+	}))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create browser context: %w", err)
+	}
+
+	var targetID target.ID
+	err = chromedp.Run(parentCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var err error
+		targetID, err = target.CreateTarget("about:blank").
+			WithBrowserContextID(browserContextID).
+			WithNewWindow(true).
+			Do(cdp.WithExecutor(ctx, chromedp.FromContext(parentCtx).Browser))
+		return err
+	}))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create target: %w", err)
+	}
+
+	ctx, cancel := chromedp.NewContext(parentCtx, chromedp.WithTargetID(targetID))
+	return ctx, cancel, nil
+}
+

@@ -1,10 +1,17 @@
 # Binaries
 ultrasearch
+go_search
+ultrasearch_test
+ultrasearch_test_bin
 *.exe
 *.out
 
 # OS Files
 .DS_Store
+
+# Session configs and Telemetry
+solver/session_config.json
+usage_telemetry.jsonl
 
 # Temporary files
 *.tmp
