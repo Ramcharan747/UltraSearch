@@ -2,7 +2,7 @@
   "name": "vscode-ultrasearch",
   "displayName": "UltraSearch Web Intelligence",
   "description": "Tavily Alternative: Unrestricted stealth web scraping and search engine for AI Agents",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -15,11 +15,19 @@
     "commands": [
       {
         "command": "ultrasearch.search",
-        "title": "UltraSearch: Web Search (For AI Context)"
+        "title": "UltraSearch: Deep Web Search (Extract Page Contents)"
       },
       {
         "command": "ultrasearch.fastSearch",
-        "title": "UltraSearch: Fast AI Overview (Skip Deep Scrape)"
+        "title": "UltraSearch: AI Overview & 10 URLs (Fast Browser)"
+      },
+      {
+        "command": "ultrasearch.quickUrls",
+        "title": "UltraSearch: Quick 10 URLs & Snippets (Fast HTTP)"
+      },
+      {
+        "command": "ultrasearch.onlyAI",
+        "title": "UltraSearch: Only AI Overview (Fast Browser)"
       }
     ]
   },

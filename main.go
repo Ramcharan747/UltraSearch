@@ -150,7 +150,7 @@ func extractText(html string) string {
 
 // ==================== WORKER ====================
 
-func worker(id int, queries <-chan string, results chan<- SearchResponse, searchBrowserCtx context.Context, maxResults int, fetchContent bool, showBrowser bool, headless bool, wg *sync.WaitGroup) {
+func worker(id int, queries <-chan string, results chan<- SearchResponse, searchBrowserCtx context.Context, maxResults int, fetchContent bool, aiMode string, showBrowser bool, headless bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 	httpClient := SharedHTTPClient()
 
@@ -160,16 +160,34 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		var res []SearchResult
 		var err error
 
-		// Attempt direct HTTP Search first to bypass browser completely (sub-500ms path)
-		res, err = runHTTPSearch(q, maxResults)
-		if err == nil && len(res) > 0 {
+		// Attempt direct HTTP Search first ONLY if aiMode is "none" (since HTTP search cannot render client-side SGE)
+		var runHTTP = (aiMode == "none")
+		if runHTTP {
+			res, err = runHTTPSearch(q, maxResults)
+		}
+		
+		if runHTTP && err == nil && len(res) > 0 {
 			log.Printf("   🚀 W%d: '%s' -> Direct HTTP Search SUCCESS (Total = %v)", id, q, time.Since(start))
+			
+			// Filter out AI Overview (rank 0) since aiMode is "none"
+			var filteredRes []SearchResult
+			for _, r := range res {
+				if r.Rank != 0 {
+					filteredRes = append(filteredRes, r)
+				}
+			}
+			res = filteredRes
+
 			if !fetchContent {
 				results <- SearchResponse{Query: q, Results: res}
 				continue
 			}
 		} else {
-			log.Printf("   ⚠️ W%d: Direct HTTP Search failed or no config, falling back to browser search... (Error: %v)", id, q, err)
+			if aiMode != "none" {
+				log.Printf("   🔍 W%d: '%s' -> Forcing browser search to fetch AI Overview (AI Mode: %s)", id, q, aiMode)
+			} else {
+				log.Printf("   ⚠️ W%d: Direct HTTP Search failed, falling back to browser search... (Error: %v)", id, q, err)
+			}
 			
 			// --- PHASE 0: Google Search (Browser Fallback / Sniffer) ---
 			tSetupStart := time.Now()
@@ -361,28 +379,57 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				continue
 			}
 
-			if !fetchContent {
-				log.Printf("   ✅ W%d: '%s' -> %d results (content skipped)", id, q, len(res))
+			// Filter results based on aiMode
+			var filteredRes []SearchResult
+			for _, r := range res {
+				if aiMode == "only" {
+					if r.Rank == 0 {
+						filteredRes = append(filteredRes, r)
+					}
+				} else if aiMode == "none" {
+					if r.Rank != 0 {
+						filteredRes = append(filteredRes, r)
+					}
+				} else { // "both"
+					filteredRes = append(filteredRes, r)
+				}
+			}
+			res = filteredRes
+
+			if aiMode == "only" || !fetchContent {
+				log.Printf("   ✅ W%d: '%s' -> %d results (content skipped/only-ai)", id, q, len(res))
 				results <- SearchResponse{Query: q, Results: res}
 				continue
 			}
 		}
 
-		// --- PHASE 1: CLASSIFY all URLs ---
-		deepLimit := 5
-		if deepLimit > len(res) {
-			deepLimit = len(res)
+		// Collect organic URLs for deep content extraction (maximum 5)
+		var organicIdxs []int
+		for i := 0; i < len(res); i++ {
+			if res[i].Rank > 0 {
+				organicIdxs = append(organicIdxs, i)
+				if len(organicIdxs) >= 5 {
+					break
+				}
+			}
 		}
 
+		if len(organicIdxs) == 0 {
+			log.Printf("   ✅ W%d: '%s' -> %d results (no organic results for content extraction)", id, q, len(res))
+			results <- SearchResponse{Query: q, Results: res}
+			continue
+		}
+
+		// --- PHASE 1: CLASSIFY all URLs ---
 		type classifiedURL struct {
 			idx   int
 			tier  int
 			html  string // Populated for T1 (static)
 		}
 
-		classifyCh := make(chan classifiedURL, deepLimit)
+		classifyCh := make(chan classifiedURL, len(organicIdxs))
 		
-		for i := 0; i < deepLimit; i++ {
+		for _, idx := range organicIdxs {
 			go func(idx int) {
 				cu := classifiedURL{idx: idx}
 
@@ -399,7 +446,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				cu.tier = probe.Tier
 				cu.html = probe.HTML
 				classifyCh <- cu
-			}(i)
+			}(idx)
 		}
 
 		// Collect classifications
@@ -408,7 +455,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		var t3Idxs []int             // Bot-protected
 		var t4Idxs []int             // Login-walled
 
-		for i := 0; i < deepLimit; i++ {
+		for i := 0; i < len(organicIdxs); i++ {
 			cu := <-classifyCh
 			res[cu.idx].Tier = cu.tier
 			switch cu.tier {
@@ -425,7 +472,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		}
 
 		log.Printf("   📊 W%d: Classified %d URLs → T1:%d T2:%d T3:%d T4:%d",
-			id, deepLimit, len(t1Results), len(t2Idxs), len(t3Idxs), len(t4Idxs))
+			id, len(organicIdxs), len(t1Results), len(t2Idxs), len(t3Idxs), len(t4Idxs))
 
 
 		// --- PHASE 2: EXTRACT T1 (instant, already have HTML) ---
@@ -471,7 +518,14 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 					defer t2Wg.Done()
 					defer func() { <-sem }() // Release slot
 
-					tabCtx, tabCancel := chromedp.NewContext(jsParent)
+					tabCtx, tabCancel, tabErr := createIsolatedTab(jsParent)
+					if tabErr != nil {
+						log.Printf("   ⚠️ W%d: Failed to spawn isolated tab for %s: %v", id, res[idx].URL, tabErr)
+						t2Mu.Lock()
+						t2Escalate = append(t2Escalate, idx)
+						t2Mu.Unlock()
+						return
+					}
 					tabCtx, tabTimeout := context.WithTimeout(tabCtx, 10*time.Second)
 
 					var htmlDump string
@@ -556,7 +610,11 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 			for domain, idxs := range domainGroups {
 				log.Printf("   🚗 W%d: Parking on domain %s for %d targets", id, domain, len(idxs))
 				
-				parkCtx, parkCancel := chromedp.NewContext(stealthParent)
+				parkCtx, parkCancel, tabErr := createIsolatedTab(stealthParent)
+				if tabErr != nil {
+					log.Printf("   ❌ W%d: Failed to spawn isolated park tab: %v", id, tabErr)
+					continue
+				}
 				parkCtx, parkTimeout := context.WithTimeout(parkCtx, 20*time.Second)
 
 				// Step 1: Park on root domain
@@ -639,7 +697,11 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 					if !fetchSuccess || len(htmlDump) < 500 || strings.Contains(strings.ToLower(htmlDump[:min(500, len(htmlDump))]), "verify you are human") {
 						log.Printf("   ⚠️ W%d: Fetch failed/blocked on %s, falling back to tab navigation", id, targetURL)
 						
-						fallbackCtx, fallbackCancel := chromedp.NewContext(stealthParent)
+						fallbackCtx, fallbackCancel, tabErr := createIsolatedTab(stealthParent)
+						if tabErr != nil {
+							log.Printf("   ❌ W%d: Failed to spawn isolated fallback tab: %v", id, tabErr)
+							continue
+						}
 						fallbackCtx, fallbackTimeout := context.WithTimeout(fallbackCtx, 15*time.Second)
 						
 						err = chromedp.Run(fallbackCtx,
@@ -680,11 +742,11 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		// --- STATS ---
 		contentCount := 0
 		var failedURLs []string
-		for i := 0; i < deepLimit; i++ {
-			if res[i].Content != "" {
+		for _, idx := range organicIdxs {
+			if res[idx].Content != "" {
 				contentCount++
 			} else {
-				failedURLs = append(failedURLs, fmt.Sprintf("T%d:%s", res[i].Tier, res[i].URL))
+				failedURLs = append(failedURLs, fmt.Sprintf("T%d:%s", res[idx].Tier, res[idx].URL))
 			}
 		}
 
@@ -693,7 +755,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		}
 
 		log.Printf("   ✅ W%d: '%s' -> %d results, %d/%d content (%.1fs)",
-			id, q, len(res), contentCount, deepLimit, time.Since(start).Seconds())
+			id, q, len(res), contentCount, len(organicIdxs), time.Since(start).Seconds())
 		
 		results <- SearchResponse{Query: q, Results: res}
 	}
@@ -748,8 +810,10 @@ func main() {
 	workersFlag := flag.Int("workers", 5, "Number of concurrent workers")
 	contentFlag := flag.Bool("content", true, "Extract deep content from pages (if false, only returns snippets)")
 	fastAIFlag := flag.Bool("fast-ai", false, "Fast AI Mode: Skips deep scraping and instantly returns the AI Overview and URLs")
+	onlyAIFlag := flag.Bool("only-ai", false, "Only AI Overview Mode: Skips deep scraping and only returns the Google AI Overview if it exists")
+	noAIFlag := flag.Bool("no-ai", false, "No AI Mode: Skips AI Overview and instantly returns the 10 URLs (Snippets only or deep content)")
 	showBrowserFlag := flag.Bool("show-browser", false, "Show browser GUI visually on-screen during stealth operations (default: false)")
-	headlessFlag := flag.Bool("headless", false, "Run stealth browsers in real headless mode instead of headful-offscreen")
+	headlessFlag := flag.Bool("headless", true, "Run stealth browsers in real headless mode (default: true)")
 	serveFlag := flag.Bool("serve", false, "Start an HTTP API server for AI Agents")
 	portFlag := flag.String("port", "8080", "Port for the HTTP server")
 	formatFlag := flag.String("output-format", "json", "Output format (json, llm-dense)")
@@ -818,19 +882,45 @@ func main() {
 				}
 			}
 			
-			content := *contentFlag
-			if c := r.URL.Query().Get("content"); c == "false" {
-				content = false
-			}
-			if f := r.URL.Query().Get("fast_ai"); f == "true" || r.URL.Query().Get("fast-ai") == "true" {
-				content = false
-			}
+			aiMode := "none"
 			if *fastAIFlag {
-				content = false
+				aiMode = "both"
+			}
+			if *onlyAIFlag {
+				aiMode = "only"
+			}
+			if *noAIFlag {
+				aiMode = "none"
 			}
 
-			log.Printf("📡 API Request: q='%s' limit=%d content=%v showBrowser=%v headless=%v", query, limit, content, *showBrowserFlag, *headlessFlag)
-			responses := runSearchPipeline(browserCtx, []string{query}, limit, *workersFlag, content, *showBrowserFlag, *headlessFlag)
+			// Override by query params if provided
+			if m := r.URL.Query().Get("ai_mode"); m != "" {
+				if m == "only" || m == "none" || m == "both" {
+					aiMode = m
+				}
+			} else {
+				// Legacy / alternate parameters
+				if r.URL.Query().Get("only_ai") == "true" || r.URL.Query().Get("only-ai") == "true" {
+					aiMode = "only"
+				} else if r.URL.Query().Get("fast_ai") == "true" || r.URL.Query().Get("fast-ai") == "true" ||
+					r.URL.Query().Get("ai_overview") == "true" || r.URL.Query().Get("ai-overview") == "true" {
+					aiMode = "both"
+				} else if r.URL.Query().Get("no_ai") == "true" || r.URL.Query().Get("no-ai") == "true" {
+					aiMode = "none"
+				}
+			}
+
+			content := *contentFlag
+			// Default content to false if AI mode is only or both, unless explicitly overridden
+			if aiMode == "only" || aiMode == "both" {
+				content = false
+			}
+			if c := r.URL.Query().Get("content"); c != "" {
+				content = (c == "true")
+			}
+
+			log.Printf("📡 API Request: q='%s' limit=%d content=%v aiMode=%s showBrowser=%v headless=%v", query, limit, content, aiMode, *showBrowserFlag, *headlessFlag)
+			responses := runSearchPipeline(browserCtx, []string{query}, limit, *workersFlag, content, aiMode, *showBrowserFlag, *headlessFlag)
 			
 			w.Header().Set("Content-Type", "application/json")
 			if len(responses) > 0 {
@@ -868,13 +958,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	fetchContent := *contentFlag
+	aiMode := "none"
 	if *fastAIFlag {
+		aiMode = "both"
+	}
+	if *onlyAIFlag {
+		aiMode = "only"
+	}
+	if *noAIFlag {
+		aiMode = "none"
+	}
+
+	fetchContent := *contentFlag
+	if *fastAIFlag || aiMode == "only" {
 		fetchContent = false
 	}
 
-	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v (FastAI: %v)", *workersFlag, fetchContent, *fastAIFlag)
-		responses := runSearchPipeline(nil, queries, *limitFlag, *workersFlag, fetchContent, *showBrowserFlag, *headlessFlag)
+	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v (FastAI: %v, AI Mode: %s)", *workersFlag, fetchContent, *fastAIFlag, aiMode)
+	responses := runSearchPipeline(nil, queries, *limitFlag, *workersFlag, fetchContent, aiMode, *showBrowserFlag, *headlessFlag)
 
 	// Save Output
 	if *formatFlag == "llm-dense" {
@@ -910,7 +1011,7 @@ func formatLLMDense(responses []SearchResponse) string {
 	}
 	return sb.String()
 }
-func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxResults int, numWorkers int, fetchContent bool, showBrowser bool, headless bool) []SearchResponse {
+func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxResults int, numWorkers int, fetchContent bool, aiMode string, showBrowser bool, headless bool) []SearchResponse {
 	startTotal := time.Now()
 
 	var browserCtx context.Context
@@ -958,7 +1059,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go worker(i, queriesChan, resultsChan, browserCtx, maxResults, fetchContent, showBrowser, headless, &wg)
+		go worker(i, queriesChan, resultsChan, browserCtx, maxResults, fetchContent, aiMode, showBrowser, headless, &wg)
 	}
 
 	for _, q := range queries {
@@ -992,8 +1093,15 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 		}
 		var retryList []retryTarget
 		for qi, resp := range responses {
+			organicCount := 0
 			for ri, r := range resp.Results {
-				if ri >= 5 { break } // Only retry top 5
+				if r.Rank == 0 {
+					continue
+				}
+				organicCount++
+				if organicCount > 5 {
+					break
+				}
 				if r.Content == "" && r.Tier >= TierJSRender && r.URL != "" {
 					retryList = append(retryList, retryTarget{qi, ri, r.URL})
 				}
@@ -1027,7 +1135,11 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 
 			recovered := 0
 			for _, rt := range retryList {
-				tabCtx, tabCancel := chromedp.NewContext(retryParent)
+				tabCtx, tabCancel, tabErr := createIsolatedTab(retryParent)
+				if tabErr != nil {
+					log.Printf("   ❌ Failed to spawn isolated retry tab: %v", tabErr)
+					continue
+				}
 				tabCtx, tabTimeout := context.WithTimeout(tabCtx, 15*time.Second)
 
 				var htmlDump string
@@ -1085,8 +1197,15 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 	tierOK := map[int]int{}
 	totalContent := 0
 	for _, resp := range responses {
-		for i, r := range resp.Results {
-			if i >= 5 { break }
+		organicCount := 0
+		for _, r := range resp.Results {
+			if r.Rank == 0 {
+				continue
+			}
+			organicCount++
+			if organicCount > 5 {
+				break
+			}
 			tierTotal[r.Tier]++
 			if r.Content != "" {
 				tierOK[r.Tier]++
@@ -1278,7 +1397,12 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 							statsMu.Unlock()
 							
 							// Run search through browser fallback (Phase 0) to capture fresh headers/cookies
-							ctx, cancel := chromedp.NewContext(browserCtx)
+							ctx, cancel, tabErr := createIsolatedTab(browserCtx)
+							if tabErr != nil {
+								log.Printf("🛡️ [W%d] Self-heal: Failed to spawn isolated tab: %v", workerID, tabErr)
+								healMu.Unlock()
+								continue
+							}
 							ctx, cancelTimeout := context.WithTimeout(ctx, 25*time.Second)
 							
 							searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), limit+10)

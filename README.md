@@ -1,55 +1,113 @@
 <div align="center">
   <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Go_Logo_Blue.svg" alt="Golang" width="80"/>
-  <h1>UltraSearch</h1>
-  <p><b>The Unrestricted Tavily Alternative for Local AI Agents</b></p>
+  <h1>🔍 UltraSearch (v2.01)</h1>
+  <p><b>The Unrestricted, Self-Hosted Tavily Alternative for Local AI Agents</b></p>
   
-  [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org)
+  [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://golang.org)
   [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-  [![Stealth](https://img.shields.io/badge/Bypass-Cloudflare%20%7C%20DataDome-red.svg)](#stealth)
-  [![Agents](https://img.shields.io/badge/AI%20Agents-OpenClaw%20%7C%20AutoGPT-purple.svg)](#api)
+  [![Bypass](https://img.shields.io/badge/Bypass-Cloudflare%20%7C%20DataDome-red.svg)](#stealth)
+  [![Extension](https://img.shields.io/badge/VS%20Code-v2.0.1-blue?logo=visual-studio-code&logoColor=white)](#vs-code--cursor-integration)
 </div>
 
 <br/>
 
-**UltraSearch** is a self-hosted, unrestricted web search and extraction engine designed specifically for **Agentic Workflows** (OpenClaw, AutoGPT, LangChain, Cursor). 
+**UltraSearch** is a self-hosted, unrestricted web search and page content extraction engine designed specifically for **AI Agentic Workflows** (Cursor, OpenClaw, AutoGPT, LangChain). 
 
-Tired of API rate limits, expensive credits, and restrictive scraping policies from commercial tools like Tavily? UltraSearch runs entirely on your local machine, effortlessly bypassing enterprise-grade bot protections (Cloudflare Turnstile, DataDome) to feed raw, pristine, token-optimized data directly into your LLM's context window.
-
-## 🔥 Why UltraSearch?
-
-- **Sub-500ms Google AI Overview Extraction**: Natively extracts Google's new generative AI summaries (SGE) as "Rank 0" results. By utilizing our Hybrid Session Pool, it executes raw HTTP queries bypassing browser overhead entirely, delivering results in **sub-500ms** (averaging under 900ms under heavy concurrency stress tests).
-- **Hybrid Session Pool Manager**: Features automatic session reservation, persistence (`use_count`, `blocked`), and a 5-use limit eviction mechanism. Spawns isolated, concurrency-limited background threads to replenish sessions seamlessly with zero latency impact.
-- **Local API Server (`--serve`)**: Instantly drop UltraSearch into any agent framework as a 1:1 replacement for external search APIs. 
-- **LLM-Dense Output (`--output-format=llm-dense`)**: Generates hyper-compressed, whitespace-stripped HTML/Text chunks specifically engineered to maximize your LLM's context window.
-- **VS Code Extension Integration**: Includes a native VS Code wrapper (`vscode-ultrasearch/`) so AI assistants like Cursor or GitHub Copilot can directly command the engine to research the web.
-- **Automated Defensive Classification:** Intelligently probes targets and classifies them into 4 tiers (Static HTML, JS-Rendered, Bot-Protected, Login-Walled).
-- **Human-Mimicry Solvers:** Features a robust ML-trained trajectory generator that simulates human cursor movements and input latency to flawlessly bypass zero-click CAPTCHAs.
+Tired of commercial search API rate limits, expensive credits, and restrictive scraping policies? UltraSearch runs entirely on your local machine, feeding raw, pristine, token-optimized data directly into your LLM's context window.
 
 ---
 
-## 🔌 VS Code / Cursor Integration
+## ⚡ What, How, and Why?
 
-To allow your AI assistant (e.g. Cursor, GitHub Copilot) to use UltraSearch seamlessly without leaving the IDE:
-1. Navigate to the extension folder: `cd vscode-ultrasearch`
-2. Install dependencies: `npm install`
-3. Package the extension: `npx vsce package`
-4. Install the generated `.vsix` file into your IDE.
+### The "Why" (The Motivation)
+AI agents require real-time information to complete coding and research tasks. Commercial search APIs (like Tavily, Serper, or Google Custom Search) have major limitations:
+1. **High Costs:** Pay-per-query credits accumulate quickly during agent loops.
+2. **Scraping Blocks:** They often return only search snippets, missing the full page body because the target website blocks standard HTTP crawlers.
+3. **No SGE:** They lack access to Google's generative **AI Overviews (SGE)**.
 
-This registers the command `UltraSearch: Web Search (For AI Context)`, enabling your IDE agents to dynamically scrape data directly into a dense, token-optimized editor tab.
+UltraSearch solves this by running a smart local engine that escalates requests automatically, using a pre-trained **human mouse trajectory solver** to bypass captchas, and stripping HTML into token-optimized text.
+
+### The "How" (4-Tier Escalation Model)
+UltraSearch doesn't waste heavy browser resources on simple pages. It routes requests dynamically to maximize speed and bypass protection:
+
+```mermaid
+graph TD
+    A[Scrape Request] --> B{Tier 1: Static HTTP}
+    B -->|Success in <150ms| C[Extract Content]
+    B -->|Failed / Protected| D{Tier 2: Headless Chrome}
+    D -->|Success| C
+    D -->|Blocked / Cloudflare| E{Tier 3: Stealth Browser}
+    E -->|Solved via Trajectory Solver| C
+    E -->|Aggressive Challenge| F{Tier 4: Domain Parking}
+    F -->|Silent Fetch via Root Session| C
+    C --> G[readability.js Clean Text]
+    G --> H[LLM-Dense Output]
+```
+
+* **Tier 1 (Static HTTP):** Performs ultra-fast HTTP queries using headers/cookies from our active session pool.
+* **Tier 2 (JS Rendered):** Spawns a headless browser to render SPAs (React, Angular) and extract client-side dynamic text.
+* **Tier 3 (Stealth Browser):** Evades detection using OS-level browser spoofing and a machine-learning mouse trajectory solver.
+* **Tier 4 (Domain Parking):** Parks a background browser on the root domain and executes silent sub-page fetches using the cleared session to avoid resetting session firewalls.
 
 ---
 
-## 🧠 Trajectory Model
+## 🆕 New in Version 2.01: Modular Search Modes
 
-UltraSearch natively bypasses advanced bot detection (like Cloudflare Turnstile) by replaying biological, human-verified cursor movements. 
+We have refactored our core pipeline to introduce three distinct search modes to control how queries are resolved, providing up to **5x faster search speeds** depending on your latency requirements:
 
-The `solver/trajectories.json` file is a pre-trained codebase generated by our sister project: **[Cursor Trajectory](https://github.com/Ramcharan747/Cursor-tragectory)**. 
+### 1. HTTP-Only Search (`-no-ai` / `ai_mode=none`)
+* **How it works:** Skips Chrome browser rendering entirely. Performs raw, pre-warmed HTTP requests using session tokens from our session manager.
+* **Performance:** **Sub-500ms results** (typically ~120ms network request + parsing overhead).
+* **Output:** Organic rank 1-10 search result links and snippets (AI Overview is completely filtered out).
 
-If you wish to avoid having a shared fingerprint with other users, you can run the Rust capture daemon from that repository to record your **own unique biological movements** and train a personal SIREN → VQ-VAE → Latent ODE model!
+### 2. Only AI Overview (`-only-ai` / `ai_mode=only`)
+* **How it works:** Spawns a stealth browser tab to navigate Google Search and extracts only the SGE (Google AI Overview) text box (Rank 0 result).
+* **Output:** Re-synthesized generative summary. Organic links are omitted.
+
+### 3. Dual Mode (`-fast-ai` / `ai_mode=both`)
+* **How it works:** Spawns a stealth browser tab and captures both the SGE Overview and the organic rank 1-10 results.
+* **Output:** Generative summary + 10 organic URLs.
 
 ---
 
-## 🚀 Installation
+## 🔑 Hybrid Session Pool Manager
+
+To make HTTP-Only search (`-no-ai`) work without triggering Google's rate-limiting or CAPTCHAs, UltraSearch maintains a background **Session Pool** (`solver/session_config.json`):
+1. **Sniffing:** During browser searches, it listens to the network protocol and intercepts authenticated cookies and request headers.
+2. **Persistence:** Sessions are saved with custom metadata (`use_count`, `created_at`, `blocked`).
+3. **Eviction:** Sessions are automatically rotated after 5 uses or immediately evicted if they return a 429 status code.
+4. **Replenishment:** The pool spawns a silent background worker to replenish tokens before they run out.
+
+---
+
+## 🔌 VS Code & Cursor IDE Integration
+
+UltraSearch contains a native VS Code wrapper (`vscode-ultrasearch/`) so that coding assistants (like **Cursor** or **GitHub Copilot**) can command your local engine to search the web directly inside your project workspace.
+
+### Packaging & Installation
+1. Navigate to the extension folder:
+   ```bash
+   cd vscode-ultrasearch
+   npm install
+   ```
+2. Package the extension to a `.vsix` file:
+   ```bash
+   npx vsce package
+   ```
+3. Install the generated `.vsix` in your editor (e.g., in VS Code, click *Extensions -> ... -> Install from VSIX...*).
+
+### Commands Available
+
+| commandId | Command Name | Under-the-Hood CLI Execution |
+| :--- | :--- | :--- |
+| `ultrasearch.search` | **Deep Web Search** | `ultrasearch -query "..." -no-ai` (Retrieves full page bodies) |
+| `ultrasearch.fastSearch` | **AI Overview & 10 URLs** | `ultrasearch -query "..." -fast-ai` |
+| `ultrasearch.quickUrls` | **Quick 10 URLs (HTTP)** | `ultrasearch -query "..." -no-ai -content=false` (Sub-500ms) |
+| `ultrasearch.onlyAI` | **Only AI Overview** | `ultrasearch -query "..." -only-ai` |
+
+---
+
+## 🚀 Installation & CLI Build
 
 Ensure you have [Go 1.21+](https://go.dev/) installed.
 
@@ -58,38 +116,26 @@ Ensure you have [Go 1.21+](https://go.dev/) installed.
 git clone https://github.com/Ramcharan747/UltraSearch.git
 cd UltraSearch
 
-# Install dependencies
+# Install package dependencies
 go mod tidy
 
-# Build the CLI tool
-go build -o ultrasearch main.go classifier.go
+# Compile the project binary
+go build -o ultrasearch main.go classifier.go http_search.go
 ```
 
 ---
 
-## 💻 Usage
+## 💻 CLI Flags Reference
 
-UltraSearch is designed to be fully controllable via CLI flags.
+You can run UltraSearch in single-query mode, batch-processing mode, or as a background API server:
 
-### Single Query
-Run a stealth search on a single query and extract deep content from the top 5 results.
 ```bash
-./ultrasearch -query "best python stealth scraping tools 2025" -limit 5
-```
+# Start the local API server on port 8082 for your AI Agents
+./ultrasearch -serve -port 8082
 
-### Bundle Search (Bulk Queries)
-Pass a text file (`queries.txt`) containing thousands of queries (one per line) to be processed in parallel.
-```bash
-./ultrasearch -bundle queries.txt -workers 10 -limit 10
+# Run a quick, HTTP-only URL search
+./ultrasearch -query "best startups in silicon valley 2026" -no-ai -content=false
 ```
-
-### Lightweight Mode
-Only extract search snippets and URLs, skipping the deep content extraction (lightning fast).
-```bash
-./ultrasearch -query "private equity SaaS acquisitions" -content=false
-```
-
-### CLI Arguments Reference
 
 | Flag | Default | Description |
 | :--- | :--- | :--- |
@@ -98,29 +144,17 @@ Only extract search snippets and URLs, skipping the deep content extraction (lig
 | `-limit` | `10` | Maximum number of search results to process per query. |
 | `-workers` | `5` | Number of concurrent processing workers to spawn. |
 | `-content` | `true` | Extract full page content (T1-T4). Set to `false` for URL/Snippet only. |
+| `-no-ai` | `false` | Enable HTTP-only search mode (skips SGE rendering). |
+| `-only-ai` | `false` | Returns only SGE AI Overview if it exists. |
+| `-fast-ai` | `false` | Dual mode: returns SGE overview and organic URLs. |
+| `-serve` | `false` | Starts the HTTP API server for agent integration. |
+| `-port` | `"8080"` | Port for the HTTP server. |
 | `-output` | `"ultra_results.json"` | Path to save the extracted JSON data. |
+| `-output-format`| `"json"` | Format to output (`json` or `llm-dense`). |
 
 ---
 
-## 🧠 Architecture: The 4-Tier Escalation Model
+## 🤝 Contribution & License
 
-UltraSearch doesn't waste heavy browser resources on simple pages. It routes traffic intelligently:
-
-1. **Tier 1 (Static):** Fast `net/http` extraction. Pure curl speed.
-2. **Tier 2 (JS-Rendered):** Headless Chrome tabs for SPAs (React, Next.js).
-3. **Tier 3 (Bot-Protected):** Non-headless Chrome with deep CDP stealth flags, fingerprint spoofing, and the trajectory solver engine.
-4. **Tier 4 (Domain Persistence):** For aggressive Managed Challenges. Parks on the root domain, clears the firewall, and extracts target sub-pages invisibly via background JS `fetch()` to evade session resets.
-
----
-
-## 🤝 Contributing
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 License
-Distributed under the MIT License. See `LICENSE` for more information.
+Contributions are welcome! Please open a Pull Request or issue to discuss additions.
+Distributed under the MIT License. See `LICENSE` for details.
