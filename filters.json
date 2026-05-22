@@ -1,0 +1,58 @@
+{
+  "browser": {
+    "language": "browser",
+    "country": "browser",
+    "uule": "browser",
+    "safe_search": "browser",
+    "tbs": "browser"
+  },
+  "custom_fr": {
+    "language": "fr",
+    "country": "fr",
+    "uule": "browser",
+    "safe_search": "browser",
+    "tbs": "browser"
+  },
+  "fresh_day": {
+    "language": "browser",
+    "country": "browser",
+    "uule": "browser",
+    "safe_search": "browser",
+    "tbs": "qdr:d"
+  },
+  "germany_german": {
+    "language": "de",
+    "country": "de",
+    "uule": "",
+    "safe_search": "off",
+    "tbs": ""
+  },
+  "india_hindi": {
+    "language": "hi",
+    "country": "in",
+    "uule": "",
+    "safe_search": "off",
+    "tbs": ""
+  },
+  "safe_active": {
+    "language": "browser",
+    "country": "browser",
+    "uule": "browser",
+    "safe_search": "active",
+    "tbs": "browser"
+  },
+  "uk_english": {
+    "language": "en",
+    "country": "gb",
+    "uule": "",
+    "safe_search": "off",
+    "tbs": ""
+  },
+  "us_english": {
+    "language": "en",
+    "country": "us",
+    "uule": "",
+    "safe_search": "off",
+    "tbs": ""
+  }
+}

@@ -786,6 +786,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				chromedp.Flag("disable-gpu", true),
 				chromedp.Flag("no-sandbox", true),
 				chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+				chromedp.Flag("mute-audio", true),
 				chromedp.WindowSize(1440, 900),
 				chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 			}
@@ -873,6 +874,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				chromedp.Flag("no-sandbox", true),
 				chromedp.Flag("disable-extensions", false),
 				chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+				chromedp.Flag("mute-audio", true),
 				chromedp.WindowSize(1440, 900),
 				chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 			}
@@ -1195,6 +1197,7 @@ func main() {
 			chromedp.Flag("disable-extensions", false),
 			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
 			chromedp.Flag("blink-settings", "imagesEnabled=false"),
+			chromedp.Flag("mute-audio", true),
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
@@ -1472,6 +1475,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 			chromedp.Flag("disable-extensions", false),
 			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
 			chromedp.Flag("blink-settings", "imagesEnabled=false"), // natively block images
+			chromedp.Flag("mute-audio", true),
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
@@ -1558,6 +1562,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 				chromedp.Flag("no-sandbox", true),
 				chromedp.Flag("disable-extensions", false),
 				chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
+				chromedp.Flag("mute-audio", true),
 				chromedp.WindowSize(1440, 900),
 				chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 			}
@@ -1776,6 +1781,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 			chromedp.Flag("disable-extensions", false),
 			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
 			chromedp.Flag("blink-settings", "imagesEnabled=false"),
+			chromedp.Flag("mute-audio", true),
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
@@ -2055,6 +2061,7 @@ func GetGlobalBrowserCtx() context.Context {
 			chromedp.Flag("disable-extensions", false),
 			chromedp.Flag("disable-features", "DownloadFonts,FontAccess"),
 			chromedp.Flag("blink-settings", "imagesEnabled=false"),
+			chromedp.Flag("mute-audio", true),
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
