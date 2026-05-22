@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -167,6 +169,87 @@ func (m *FilterProfileManager) List() map[string]SearchFilters {
 
 var filterManager *FilterProfileManager
 
+func detectSystemLanguage() string {
+	if runtime.GOOS == "darwin" {
+		cmd := exec.Command("defaults", "read", "-g", "AppleLocale")
+		if out, err := cmd.Output(); err == nil {
+			loc := strings.TrimSpace(string(out))
+			loc = strings.Split(loc, "@")[0]
+			parts := strings.Split(loc, "_")
+			if len(parts) > 0 && len(parts[0]) > 0 {
+				return strings.ToLower(parts[0])
+			}
+		}
+	}
+	langEnv := os.Getenv("LANG")
+	if langEnv == "" {
+		langEnv = os.Getenv("LC_ALL")
+	}
+	if langEnv == "" {
+		langEnv = os.Getenv("LC_MESSAGES")
+	}
+	if langEnv != "" && langEnv != "C" && langEnv != "POSIX" && langEnv != "C.UTF-8" {
+		parts := strings.Split(langEnv, ".")
+		if len(parts) > 0 {
+			langCountry := parts[0]
+			langParts := strings.Split(langCountry, "_")
+			if len(langParts) > 0 && len(langParts[0]) > 0 {
+				return strings.ToLower(langParts[0])
+			}
+		}
+	}
+	return "en"
+}
+
+func detectSystemCountry() string {
+	if runtime.GOOS == "darwin" {
+		cmd := exec.Command("defaults", "read", "-g", "AppleLocale")
+		if out, err := cmd.Output(); err == nil {
+			loc := strings.TrimSpace(string(out))
+			loc = strings.Split(loc, "@")[0]
+			parts := strings.Split(loc, "_")
+			if len(parts) > 1 && len(parts[1]) > 0 {
+				return strings.ToLower(parts[1])
+			}
+		}
+	}
+	langEnv := os.Getenv("LANG")
+	if langEnv == "" {
+		langEnv = os.Getenv("LC_ALL")
+	}
+	if langEnv != "" && langEnv != "C" && langEnv != "POSIX" && langEnv != "C.UTF-8" {
+		parts := strings.Split(langEnv, ".")
+		if len(parts) > 0 {
+			langCountry := parts[0]
+			langParts := strings.Split(langCountry, "_")
+			if len(langParts) > 1 && len(langParts[1]) > 0 {
+				return strings.ToLower(langParts[1])
+			}
+		}
+	}
+	return "us"
+}
+
+func (m *FilterProfileManager) Resolve(filters SearchFilters) SearchFilters {
+	res := filters
+	if res.Language == "browser" || res.Language == "" {
+		res.Language = detectSystemLanguage()
+	}
+	if res.Country == "browser" || res.Country == "" {
+		res.Country = detectSystemCountry()
+	}
+	if res.Uule == "browser" {
+		res.Uule = ""
+	}
+	if res.SafeSearch == "browser" {
+		res.SafeSearch = "off"
+	}
+	if res.Tbs == "browser" {
+		res.Tbs = ""
+	}
+	return res
+}
+
 func BuildSearchURL(q string, limit int, filters SearchFilters) string {
 	base, err := url.Parse("https://www.google.com/search")
 	if err != nil {
@@ -178,20 +261,44 @@ func BuildSearchURL(q string, limit int, filters SearchFilters) string {
 		params.Set("num", fmt.Sprintf("%d", limit))
 	}
 
-	if filters.Language != "" && filters.Language != "browser" {
-		params.Set("hl", filters.Language)
+	lang := filters.Language
+	if lang == "browser" {
+		lang = detectSystemLanguage()
 	}
-	if filters.Country != "" && filters.Country != "browser" {
-		params.Set("gl", filters.Country)
+	if lang != "" {
+		params.Set("hl", lang)
 	}
-	if filters.Uule != "" && filters.Uule != "browser" {
-		params.Set("uule", filters.Uule)
+
+	country := filters.Country
+	if country == "browser" {
+		country = detectSystemCountry()
 	}
-	if filters.SafeSearch != "" && filters.SafeSearch != "browser" {
-		params.Set("safe", filters.SafeSearch)
+	if country != "" {
+		params.Set("gl", country)
 	}
-	if filters.Tbs != "" && filters.Tbs != "browser" {
-		params.Set("tbs", filters.Tbs)
+
+	uule := filters.Uule
+	if uule == "browser" {
+		uule = ""
+	}
+	if uule != "" {
+		params.Set("uule", uule)
+	}
+
+	safe := filters.SafeSearch
+	if safe == "browser" {
+		safe = "off"
+	}
+	if safe != "" {
+		params.Set("safe", safe)
+	}
+
+	tbs := filters.Tbs
+	if tbs == "browser" {
+		tbs = ""
+	}
+	if tbs != "" {
+		params.Set("tbs", tbs)
 	}
 
 	base.RawQuery = params.Encode()
@@ -200,7 +307,7 @@ func BuildSearchURL(q string, limit int, filters SearchFilters) string {
 
 func getLanguagesForCode(lang string) []string {
 	if lang == "" || lang == "browser" {
-		return []string{"en-US", "en"}
+		lang = detectSystemLanguage()
 	}
 	switch lang {
 	case "en":
@@ -235,22 +342,27 @@ func GetStealthScript(lang string) string {
 	return strings.Replace(solver.StealthScript, "['en-US', 'en']", langStr, 1)
 }
 
+func GetAcceptLangOption(lang string) chromedp.ExecAllocatorOption {
+	langs := getLanguagesForCode(lang)
+	return chromedp.Flag("accept-lang", strings.Join(langs, ","))
+}
+
 func GetReplenishFilters() SearchFilters {
 	if filterManager != nil {
 		if f, ok := filterManager.Get("default"); ok {
-			return f
+			return filterManager.Resolve(f)
 		}
 		if f, ok := filterManager.Get("browser"); ok {
-			return f
+			return filterManager.Resolve(f)
 		}
 	}
-	return SearchFilters{
+	return filterManager.Resolve(SearchFilters{
 		Language:   "browser",
 		Country:    "browser",
 		Uule:       "browser",
 		SafeSearch: "browser",
 		Tbs:        "browser",
-	}
+	})
 }
 
 const extractJS = `(maxResults) => {
@@ -510,6 +622,13 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 						{URLPattern: "*://*:*/*.webm", Block: true},
 						{URLPattern: "*://*/*analytics*", Block: true},
 						{URLPattern: "*://*/*doubleclick*", Block: true},
+					}).Do(ctx)
+					if err != nil {
+						return err
+					}
+					langs := getLanguagesForCode(filters.Language)
+					err = network.SetExtraHTTPHeaders(network.Headers{
+						"Accept-Language": strings.Join(langs, ","),
 					}).Do(ctx)
 					if err != nil {
 						return err
@@ -790,7 +909,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				chromedp.WindowSize(1440, 900),
 				chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 			}
-
+			jsOpts = append(jsOpts, GetAcceptLangOption(filters.Language))
 			jsAlloc, jsAllocCancel := chromedp.NewExecAllocator(context.Background(), jsOpts...)
 			jsParent, jsParentCancel := chromedp.NewContext(jsAlloc)
 			chromedp.Run(jsParent) // Start browser once
@@ -821,6 +940,15 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 					var htmlDump string
 					err := chromedp.Run(tabCtx,
 						chromedp.ActionFunc(func(c context.Context) error {
+							if err := network.Enable().Do(c); err != nil {
+								return err
+							}
+							langs := getLanguagesForCode(filters.Language)
+							if err := network.SetExtraHTTPHeaders(network.Headers{
+								"Accept-Language": strings.Join(langs, ","),
+							}).Do(c); err != nil {
+								return err
+							}
 							_, err := page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
 							return err
 						}),
@@ -881,7 +1009,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 			if !showBrowser && !headless {
 				stealthOpts = append(stealthOpts, chromedp.Flag("window-position", "-2400,-2400"))
 			}
-
+			stealthOpts = append(stealthOpts, GetAcceptLangOption(filters.Language))
 			stealthAlloc, stealthAllocCancel := chromedp.NewExecAllocator(context.Background(), stealthOpts...)
 			stealthParent, stealthParentCancel := chromedp.NewContext(stealthAlloc)
 			chromedp.Run(stealthParent) // Start browser once
@@ -911,6 +1039,15 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				// Step 1: Park on root domain
 				err := chromedp.Run(parkCtx,
 					chromedp.ActionFunc(func(c context.Context) error {
+						if err := network.Enable().Do(c); err != nil {
+							return err
+						}
+						langs := getLanguagesForCode(filters.Language)
+						if err := network.SetExtraHTTPHeaders(network.Headers{
+							"Accept-Language": strings.Join(langs, ","),
+						}).Do(c); err != nil {
+							return err
+						}
 						_, err := page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
 						return err
 					}),
@@ -996,6 +1133,19 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 						fallbackCtx, fallbackTimeout := context.WithTimeout(fallbackCtx, 15*time.Second)
 						
 						err = chromedp.Run(fallbackCtx,
+							chromedp.ActionFunc(func(c context.Context) error {
+								if err := network.Enable().Do(c); err != nil {
+									return err
+								}
+								langs := getLanguagesForCode(filters.Language)
+								if err := network.SetExtraHTTPHeaders(network.Headers{
+									"Accept-Language": strings.Join(langs, ","),
+								}).Do(c); err != nil {
+									return err
+								}
+								_, err = page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
+								return err
+							}),
 							chromedp.Navigate(targetURL),
 							chromedp.Sleep(2500*time.Millisecond),
 						)
@@ -1170,6 +1320,8 @@ func main() {
 		}
 	}
 
+	resolvedFilters = filterManager.Resolve(resolvedFilters)
+
 	// Proactively pre-fill the session pool at startup if we have fewer than 5 active sessions
 	if poolManager.ActiveCount() < 5 {
 		log.Println("🔑 [Session Pool] Startup pool count low. Pre-filling session pool...")
@@ -1201,6 +1353,7 @@ func main() {
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
+		opts = append(opts, GetAcceptLangOption(resolvedFilters.Language))
 
 		allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 		defer cancelAlloc()
@@ -1451,6 +1604,7 @@ func formatLLMDense(responses []SearchResponse) string {
 	return sb.String()
 }
 func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxResults int, numWorkers int, fetchContent bool, aiMode string, showBrowser bool, headless bool, filters SearchFilters) []SearchResponse {
+	filters = filterManager.Resolve(filters)
 	startTotal := time.Now()
 
 	var browserCtx context.Context
@@ -1479,6 +1633,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
+		opts = append(opts, GetAcceptLangOption(filters.Language))
 
 		allocCtx, cancelAlloc = chromedp.NewExecAllocator(context.Background(), opts...)
 		browserCtx, cancelBrowser = chromedp.NewContext(allocCtx)
@@ -1569,7 +1724,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 			if !showBrowser && !headless {
 				retryOpts = append(retryOpts, chromedp.Flag("window-position", "-2400,-2400"))
 			}
-
+			retryOpts = append(retryOpts, GetAcceptLangOption(filters.Language))
 			retryAlloc, retryAllocCancel := chromedp.NewExecAllocator(context.Background(), retryOpts...)
 			retryParent, retryParentCancel := chromedp.NewContext(retryAlloc)
 			chromedp.Run(retryParent)
@@ -1586,6 +1741,15 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 				var htmlDump string
 				err := chromedp.Run(tabCtx,
 					chromedp.ActionFunc(func(c context.Context) error {
+						if err := network.Enable().Do(c); err != nil {
+							return err
+						}
+						langs := getLanguagesForCode(filters.Language)
+						if err := network.SetExtraHTTPHeaders(network.Headers{
+							"Accept-Language": strings.Join(langs, ","),
+						}).Do(c); err != nil {
+							return err
+						}
 						_, err := page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
 						return err
 					}),
@@ -1785,6 +1949,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
+		opts = append(opts, GetAcceptLangOption(filters.Language))
 		allocCtx, cancelAlloc = chromedp.NewExecAllocator(context.Background(), opts...)
 		browserCtx, cancelBrowser = chromedp.NewContext(allocCtx)
 		// Start browser
@@ -2065,6 +2230,7 @@ func GetGlobalBrowserCtx() context.Context {
 			chromedp.WindowSize(1440, 900),
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
 		}
+		opts = append(opts, GetAcceptLangOption(GetReplenishFilters().Language))
 		globalAllocCtx, globalAllocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
 		globalBrowserCtx, globalBrowserCancel = chromedp.NewContext(globalAllocCtx)
 		if err := chromedp.Run(globalBrowserCtx); err != nil {
@@ -2171,6 +2337,13 @@ func ReplenishSessionPool(targetCount int) {
 			err := chromedp.Run(ctx,
 				chromedp.ActionFunc(func(c context.Context) error {
 					err := network.Enable().Do(c)
+					if err != nil {
+						return err
+					}
+					langs := getLanguagesForCode(GetReplenishFilters().Language)
+					err = network.SetExtraHTTPHeaders(network.Headers{
+						"Accept-Language": strings.Join(langs, ","),
+					}).Do(c)
 					if err != nil {
 						return err
 					}

@@ -358,25 +358,25 @@ func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchRes
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	}
-	if filters.Language != "" && filters.Language != "browser" {
-		langs := getLanguagesForCode(filters.Language)
-		var parts []string
-		qVal := 1.0
-		for _, l := range langs {
-			if qVal == 1.0 {
-				parts = append(parts, l)
-			} else {
-				parts = append(parts, fmt.Sprintf("%s;q=%.1f", l, qVal))
-			}
-			qVal -= 0.1
-			if qVal < 0.1 {
-				qVal = 0.1
-			}
-		}
-		req.Header.Set("Accept-Language", strings.Join(parts, ","))
-	} else if req.Header.Get("Accept-Language") == "" {
-		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	langCode := filters.Language
+	if langCode == "" || langCode == "browser" {
+		langCode = detectSystemLanguage()
 	}
+	langs := getLanguagesForCode(langCode)
+	var parts []string
+	qVal := 1.0
+	for _, l := range langs {
+		if qVal == 1.0 {
+			parts = append(parts, l)
+		} else {
+			parts = append(parts, fmt.Sprintf("%s;q=%.1f", l, qVal))
+		}
+		qVal -= 0.1
+		if qVal < 0.1 {
+			qVal = 0.1
+		}
+	}
+	req.Header.Set("Accept-Language", strings.Join(parts, ","))
 
 	// Apply cookies
 	var cookieStrings []string
