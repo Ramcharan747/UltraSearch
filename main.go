@@ -52,23 +52,283 @@ type SearchResponse struct {
 	Error   string         `json:"error,omitempty"`
 }
 
+type SearchFilters struct {
+	Language   string `json:"language"`    // hl, e.g. "en", "hi", "browser"
+	Country    string `json:"country"`     // gl, e.g. "us", "in", "browser"
+	Uule       string `json:"uule"`        // Location encoded parameter, e.g. "browser"
+	SafeSearch string `json:"safe_search"` // safe, e.g. "active", "off", "browser"
+	Tbs        string `json:"tbs"`         // Search tools, e.g. "qdr:d", "qdr:w", "browser"
+}
+
+type FilterProfileManager struct {
+	filePath string
+	profiles map[string]SearchFilters
+	mu       sync.RWMutex
+}
+
+func NewFilterProfileManager(filePath string) *FilterProfileManager {
+	mgr := &FilterProfileManager{
+		filePath: filePath,
+		profiles: make(map[string]SearchFilters),
+	}
+	// Initial presets
+	mgr.profiles["browser"] = SearchFilters{
+		Language:   "browser",
+		Country:    "browser",
+		Uule:       "browser",
+		SafeSearch: "browser",
+		Tbs:        "browser",
+	}
+	mgr.profiles["us_english"] = SearchFilters{
+		Language:   "en",
+		Country:    "us",
+		SafeSearch: "off",
+	}
+	mgr.profiles["india_hindi"] = SearchFilters{
+		Language:   "hi",
+		Country:    "in",
+		SafeSearch: "off",
+	}
+	mgr.profiles["uk_english"] = SearchFilters{
+		Language:   "en",
+		Country:    "gb",
+		SafeSearch: "off",
+	}
+	mgr.profiles["safe_active"] = SearchFilters{
+		SafeSearch: "active",
+	}
+	mgr.profiles["fresh_day"] = SearchFilters{
+		Tbs: "qdr:d",
+	}
+
+	mgr.Load()
+	return mgr
+}
+
+func (m *FilterProfileManager) Load() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	data, err := os.ReadFile(m.filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	var loaded map[string]SearchFilters
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		return err
+	}
+
+	for name, filters := range loaded {
+		m.profiles[name] = filters
+	}
+	return nil
+}
+
+func (m *FilterProfileManager) Save() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	data, err := json.MarshalIndent(m.profiles, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(m.filePath, data, 0644)
+}
+
+func (m *FilterProfileManager) Get(name string) (SearchFilters, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	f, ok := m.profiles[name]
+	return f, ok
+}
+
+func (m *FilterProfileManager) Set(name string, filters SearchFilters) error {
+	m.mu.Lock()
+	m.profiles[name] = filters
+	m.mu.Unlock()
+	return m.Save()
+}
+
+func (m *FilterProfileManager) List() map[string]SearchFilters {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	copyMap := make(map[string]SearchFilters)
+	for k, v := range m.profiles {
+		copyMap[k] = v
+	}
+	return copyMap
+}
+
+var filterManager *FilterProfileManager
+
+func BuildSearchURL(q string, limit int, filters SearchFilters) string {
+	base, err := url.Parse("https://www.google.com/search")
+	if err != nil {
+		return "https://www.google.com/search?q=" + url.QueryEscape(q)
+	}
+	params := url.Values{}
+	params.Set("q", q)
+	if limit > 0 {
+		params.Set("num", fmt.Sprintf("%d", limit))
+	}
+
+	if filters.Language != "" && filters.Language != "browser" {
+		params.Set("hl", filters.Language)
+	}
+	if filters.Country != "" && filters.Country != "browser" {
+		params.Set("gl", filters.Country)
+	}
+	if filters.Uule != "" && filters.Uule != "browser" {
+		params.Set("uule", filters.Uule)
+	}
+	if filters.SafeSearch != "" && filters.SafeSearch != "browser" {
+		params.Set("safe", filters.SafeSearch)
+	}
+	if filters.Tbs != "" && filters.Tbs != "browser" {
+		params.Set("tbs", filters.Tbs)
+	}
+
+	base.RawQuery = params.Encode()
+	return base.String()
+}
+
+func getLanguagesForCode(lang string) []string {
+	if lang == "" || lang == "browser" {
+		return []string{"en-US", "en"}
+	}
+	switch lang {
+	case "en":
+		return []string{"en-US", "en"}
+	case "hi":
+		return []string{"hi-IN", "hi", "en-US", "en"}
+	case "es":
+		return []string{"es-ES", "es", "en-US", "en"}
+	case "fr":
+		return []string{"fr-FR", "fr", "en-US", "en"}
+	case "de":
+		return []string{"de-DE", "de", "en-US", "en"}
+	case "ja":
+		return []string{"ja-JP", "ja", "en-US", "en"}
+	case "zh":
+		return []string{"zh-CN", "zh", "en-US", "en"}
+	default:
+		return []string{lang, "en-US", "en"}
+	}
+}
+
+func GetStealthScript(lang string) string {
+	langs := getLanguagesForCode(lang)
+	langStr := "['en-US', 'en']"
+	if len(langs) > 0 {
+		var parts []string
+		for _, l := range langs {
+			parts = append(parts, fmt.Sprintf("'%s'", l))
+		}
+		langStr = "[" + strings.Join(parts, ", ") + "]"
+	}
+	return strings.Replace(solver.StealthScript, "['en-US', 'en']", langStr, 1)
+}
+
+func GetReplenishFilters() SearchFilters {
+	if filterManager != nil {
+		if f, ok := filterManager.Get("default"); ok {
+			return f
+		}
+		if f, ok := filterManager.Get("browser"); ok {
+			return f
+		}
+	}
+	return SearchFilters{
+		Language:   "browser",
+		Country:    "browser",
+		Uule:       "browser",
+		SafeSearch: "browser",
+		Tbs:        "browser",
+	}
+}
+
 const extractJS = `(maxResults) => {
     const out = [];
 
     // Attempt to extract Google AI Overview (SGE) if present
     const aiContainer = document.querySelector('.s7d4ef');
     if (aiContainer) {
-        let aiText = '';
-        const paragraphs = aiContainer.querySelectorAll('div.n6owBd');
-        if (paragraphs.length > 0) {
-            for (const p of paragraphs) {
-                aiText += p.innerText + ' ';
-            }
-        } else {
-            aiText = aiContainer.innerText;
-        }
+        // Clone container
+        const clone = aiContainer.cloneNode(true);
         
-        aiText = aiText.replace(/\n/g, ' ').trim();
+        // Remove UI elements (buttons, svgs, styles, scripts, dialogs)
+        // Keep hidden/carousel elements since SGE uses them for structured content
+        const toRemove = clone.querySelectorAll('button, svg, style, script, [role="dialog"]');
+        toRemove.forEach(el => el.remove());
+        
+        // Format code blocks dynamically
+        const preBlocks = clone.querySelectorAll('pre');
+        preBlocks.forEach(pre => {
+            const codeText = pre.innerText;
+            let lang = '';
+            if (codeText.includes('package main') || codeText.includes('func main()') || codeText.includes('go ')) {
+                lang = 'go';
+            } else if (codeText.includes('fn main()') || codeText.includes('let mut') || codeText.includes('impl ')) {
+                lang = 'rust';
+            } else if (codeText.includes('def ') || (codeText.includes('import ') && codeText.includes(':\\n'))) {
+                lang = 'python';
+            } else if (codeText.includes('const ') || codeText.includes('let ') || codeText.includes('function ')) {
+                lang = 'javascript';
+            } else if (codeText.includes('<html>') || codeText.includes('class=') || codeText.includes('</div>')) {
+                lang = 'html';
+            } else if (codeText.includes('public class ') || codeText.includes('public static void main')) {
+                lang = 'java';
+            } else if (codeText.includes('#include <')) {
+                lang = 'cpp';
+            }
+            
+            const marker = document.createElement('div');
+            marker.innerText = '\\n' + String.fromCharCode(96) + String.fromCharCode(96) + String.fromCharCode(96) + lang + '\\n' + codeText + '\\n' + String.fromCharCode(96) + String.fromCharCode(96) + String.fromCharCode(96) + '\\n';
+            pre.parentNode.replaceChild(marker, pre);
+        });
+        
+        // Format tables
+        const tables = clone.querySelectorAll('table');
+        tables.forEach(table => {
+            let mdTable = '\\n';
+            const rows = table.querySelectorAll('tr');
+            rows.forEach((row, rowIndex) => {
+                const cols = row.querySelectorAll('th, td');
+                let mdRow = '|';
+                cols.forEach(col => {
+                    mdRow += ' ' + col.innerText.replace(/\\n/g, ' ').trim() + ' |';
+                });
+                mdTable += mdRow + '\\n';
+                if (rowIndex === 0) {
+                    let mdSep = '|';
+                    cols.forEach(() => {
+                        mdSep += ' --- |';
+                    });
+                    mdTable += mdSep + '\\n';
+                }
+            });
+            mdTable += '\\n';
+            const marker = document.createElement('div');
+            marker.innerText = mdTable;
+            table.parentNode.replaceChild(marker, table);
+        });
+
+        // Append to body for layout calculation (innerText requires layout)
+        clone.style.position = 'absolute';
+        clone.style.left = '-9999px';
+        clone.style.top = '-9999px';
+        document.body.appendChild(clone);
+
+        let aiText = clone.innerText;
+        clone.remove();
+        
+        aiText = aiText.replace(/\\n{3,}/g, '\\n\\n').trim();
         const lowerText = aiText.toLowerCase();
         const isErrorText = lowerText.includes("not available for this search") || 
                             lowerText.includes("can't generate") || 
@@ -79,7 +339,7 @@ const extractJS = `(maxResults) => {
                 rank: 0, 
                 title: "✨ Google AI Overview", 
                 url: window.location.href, 
-                snippet: aiText.substring(0, 3000)
+                snippet: aiText.substring(0, 5000)
             });
         }
     }
@@ -103,7 +363,7 @@ const extractJS = `(maxResults) => {
                 }
             }
             
-            snippet = snippet.replace(/\n/g, ' ').trim();
+            snippet = snippet.replace(/\\n/g, ' ').trim();
             out.push({ rank: out.length + 1, title: h3.innerText, url: a.href, snippet: snippet.substring(0, 1000) });
         }
         if (out.length >= maxResults) break;
@@ -116,6 +376,7 @@ func init() {
 	if err != nil {
 		log.Printf("⚠️ Could not load trajectories: %v", err)
 	}
+	filterManager = NewFilterProfileManager("filters.json")
 	ReplenishCallback = func() {
 		ReplenishSessionPool(5)
 	}
@@ -150,7 +411,7 @@ func extractText(html string) string {
 
 // ==================== WORKER ====================
 
-func worker(id int, queries <-chan string, results chan<- SearchResponse, searchBrowserCtx context.Context, maxResults int, fetchContent bool, aiMode string, showBrowser bool, headless bool, wg *sync.WaitGroup) {
+func worker(id int, queries <-chan string, results chan<- SearchResponse, searchBrowserCtx context.Context, maxResults int, fetchContent bool, aiMode string, showBrowser bool, headless bool, filters SearchFilters, wg *sync.WaitGroup) {
 	defer wg.Done()
 	httpClient := SharedHTTPClient()
 
@@ -163,7 +424,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		// Attempt direct HTTP Search first ONLY if aiMode is "none" (since HTTP search cannot render client-side SGE)
 		var runHTTP = (aiMode == "none")
 		if runHTTP {
-			res, err = runHTTPSearch(q, maxResults)
+			res, err = runHTTPSearch(q, maxResults, filters)
 		}
 		
 		if runHTTP && err == nil && len(res) > 0 {
@@ -201,7 +462,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 			ctx, cancelTimeout := context.WithTimeout(ctx, 25*time.Second)
 			
 			var pageURL string
-			searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), maxResults+10)
+			searchURL := BuildSearchURL(q, maxResults+10, filters)
 
 			var tSetup, tNavigate, tPoll, tEvaluate time.Duration
 
@@ -253,7 +514,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 					if err != nil {
 						return err
 					}
-					_, err = page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(ctx)
+					_, err = page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(ctx)
 					tSetup = time.Since(tSetupStart)
 					return err
 				}),
@@ -292,8 +553,36 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				for attempt := 1; attempt <= 5; attempt++ {
 					pollErr = chromedp.Run(ctx, chromedp.Poll(`(() => {
 						const aiContainer = document.querySelector('.s7d4ef');
-						if (aiContainer && aiContainer.querySelectorAll('div.n6owBd').length > 0) {
-							return true;
+						if (aiContainer) {
+							const text = aiContainer.innerText.toLowerCase();
+							if (text.includes("not available") || text.includes("can't generate") || text.includes("try again") || text.includes("check your connection")) {
+								return true;
+							}
+							
+							const currentLen = aiContainer.innerText.length;
+							const now = Date.now();
+							
+							// If it hasn't started streaming actual content yet, keep waiting
+							if (currentLen < 150) {
+								return false;
+							}
+							
+							if (window._sgePrevLen === undefined) {
+								window._sgePrevLen = currentLen;
+								window._sgeLastChangeTime = now;
+								return false;
+							}
+							
+							if (currentLen !== window._sgePrevLen) {
+								window._sgePrevLen = currentLen;
+								window._sgeLastChangeTime = now;
+								return false;
+							}
+							
+							if (now - window._sgeLastChangeTime > 1500) {
+								return true;
+							}
+							return false;
 						}
 						const results = document.querySelectorAll('a h3');
 						if (results.length > 0) {
@@ -305,7 +594,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 							}
 						}
 						return false;
-					})()`, nil, chromedp.WithPollingInterval(50*time.Millisecond)))
+					})()`, nil, chromedp.WithPollingInterval(150*time.Millisecond)))
 					
 					if pollErr == nil {
 						break
@@ -531,7 +820,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 					var htmlDump string
 					err := chromedp.Run(tabCtx,
 						chromedp.ActionFunc(func(c context.Context) error {
-							_, err := page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(c)
+							_, err := page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
 							return err
 						}),
 						chromedp.Navigate(res[idx].URL),
@@ -620,7 +909,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				// Step 1: Park on root domain
 				err := chromedp.Run(parkCtx,
 					chromedp.ActionFunc(func(c context.Context) error {
-						_, err := page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(c)
+						_, err := page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
 						return err
 					}),
 					chromedp.Navigate(domain),
@@ -824,8 +1113,60 @@ func main() {
 	stressConcurrencyFlag := flag.Int("stress-concurrency", 2, "Concurrency level for stress test")
 	stressDelayFlag := flag.Int("stress-delay", 500, "Delay in milliseconds between queries in each worker")
 	stressSelfHealFlag := flag.Bool("stress-self-heal", true, "Trigger self-healing browser fallback when captcha blocked")
+
+	profileNameFlag := flag.String("filter-profile", "browser", "Name of the profile to use")
+	hlFlag := flag.String("hl", "", "Language filter override")
+	glFlag := flag.String("gl", "", "Country/region override")
+	uuleFlag := flag.String("uule", "", "Geolocation override")
+	safeFlag := flag.String("safe", "", "SafeSearch override")
+	tbsFlag := flag.String("tbs", "", "Search tools override")
+	saveProfileFlag := flag.String("save-profile", "", "Save the resolved filters under this profile name")
+	listProfilesFlag := flag.Bool("list-profiles", false, "List all saved profiles and exit")
 	
 	flag.Parse()
+
+	if *listProfilesFlag {
+		profiles := filterManager.List()
+		data, _ := json.MarshalIndent(profiles, "", "  ")
+		fmt.Println(string(data))
+		return
+	}
+
+	resolvedFilters, found := filterManager.Get(*profileNameFlag)
+	if !found {
+		resolvedFilters = SearchFilters{
+			Language:   "browser",
+			Country:    "browser",
+			Uule:       "browser",
+			SafeSearch: "browser",
+			Tbs:        "browser",
+		}
+	}
+	if *hlFlag != "" {
+		resolvedFilters.Language = *hlFlag
+	}
+	if *glFlag != "" {
+		resolvedFilters.Country = *glFlag
+	}
+	if *uuleFlag != "" {
+		resolvedFilters.Uule = *uuleFlag
+	}
+	if *safeFlag != "" {
+		resolvedFilters.SafeSearch = *safeFlag
+	}
+	if *tbsFlag != "" {
+		resolvedFilters.Tbs = *tbsFlag
+	}
+
+	if *saveProfileFlag != "" {
+		if err := filterManager.Set(*saveProfileFlag, resolvedFilters); err != nil {
+			log.Fatalf("Failed to save profile %q: %v", *saveProfileFlag, err)
+		}
+		log.Printf("💾 Saved profile %q to filters.json", *saveProfileFlag)
+		if *queryFlag == "" && *bundleFlag == "" && !*serveFlag && !*stressFlag {
+			return
+		}
+	}
 
 	// Proactively pre-fill the session pool at startup if we have fewer than 5 active sessions
 	if poolManager.ActiveCount() < 5 {
@@ -834,7 +1175,7 @@ func main() {
 	}
 
 	if *stressFlag {
-		runStressTest(*stressCountFlag, *stressConcurrencyFlag, *stressDelayFlag, *stressSelfHealFlag, *limitFlag, *showBrowserFlag, *headlessFlag)
+		runStressTest(*stressCountFlag, *stressConcurrencyFlag, *stressDelayFlag, *stressSelfHealFlag, *limitFlag, *showBrowserFlag, *headlessFlag, resolvedFilters)
 		return
 	}
 
@@ -867,6 +1208,59 @@ func main() {
 		if err := chromedp.Run(browserCtx); err != nil {
 			log.Fatalf("Failed to start persistent browser: %v", err)
 		}
+
+		http.HandleFunc("/profiles", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.Method == http.MethodGet {
+				json.NewEncoder(w).Encode(filterManager.List())
+				return
+			}
+			if r.Method == http.MethodPost || r.Method == http.MethodPut {
+				name := r.URL.Query().Get("name")
+				if name == "" {
+					http.Error(w, "Missing 'name' parameter", http.StatusBadRequest)
+					return
+				}
+
+				var f SearchFilters
+				if r.Header.Get("Content-Type") == "application/json" {
+					if err := json.NewDecoder(r.Body).Decode(&f); err != nil {
+						http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+						return
+					}
+				} else {
+					f = SearchFilters{
+						Language:   r.URL.Query().Get("hl"),
+						Country:    r.URL.Query().Get("gl"),
+						Uule:       r.URL.Query().Get("uule"),
+						SafeSearch: r.URL.Query().Get("safe"),
+						Tbs:        r.URL.Query().Get("tbs"),
+					}
+					if f.Language == "" && f.Country == "" && f.Uule == "" && f.SafeSearch == "" && f.Tbs == "" {
+						f = SearchFilters{
+							Language:   "browser",
+							Country:    "browser",
+							Uule:       "browser",
+							SafeSearch: "browser",
+							Tbs:        "browser",
+						}
+					}
+				}
+
+				if err := filterManager.Set(name, f); err != nil {
+					http.Error(w, fmt.Sprintf("Failed to save profile: %v", err), http.StatusInternalServerError)
+					return
+				}
+				log.Printf("💾 Saved profile %q via /profiles API", name)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"status":  "success",
+					"profile": name,
+					"filters": f,
+				})
+				return
+			}
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		})
 
 		http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 			query := r.URL.Query().Get("q")
@@ -919,8 +1313,50 @@ func main() {
 				content = (c == "true")
 			}
 
-			log.Printf("📡 API Request: q='%s' limit=%d content=%v aiMode=%s showBrowser=%v headless=%v", query, limit, content, aiMode, *showBrowserFlag, *headlessFlag)
-			responses := runSearchPipeline(browserCtx, []string{query}, limit, *workersFlag, content, aiMode, *showBrowserFlag, *headlessFlag)
+			// Resolve filters for this request
+			reqProfile := r.URL.Query().Get("profile")
+			if reqProfile == "" {
+				reqProfile = "browser"
+			}
+			reqFilters, found := filterManager.Get(reqProfile)
+			if !found {
+				reqFilters = SearchFilters{
+					Language:   "browser",
+					Country:    "browser",
+					Uule:       "browser",
+					SafeSearch: "browser",
+					Tbs:        "browser",
+				}
+			}
+
+			// Individual overrides
+			if hl := r.URL.Query().Get("hl"); hl != "" {
+				reqFilters.Language = hl
+			}
+			if gl := r.URL.Query().Get("gl"); gl != "" {
+				reqFilters.Country = gl
+			}
+			if uule := r.URL.Query().Get("uule"); uule != "" {
+				reqFilters.Uule = uule
+			}
+			if safe := r.URL.Query().Get("safe"); safe != "" {
+				reqFilters.SafeSearch = safe
+			}
+			if tbs := r.URL.Query().Get("tbs"); tbs != "" {
+				reqFilters.Tbs = tbs
+			}
+
+			// Save profile via API if requested
+			if saveProfName := r.URL.Query().Get("save_profile"); saveProfName != "" {
+				if err := filterManager.Set(saveProfName, reqFilters); err != nil {
+					log.Printf("⚠️ Failed to save profile %q via API: %v", saveProfName, err)
+				} else {
+					log.Printf("💾 Saved profile %q via API request", saveProfName)
+				}
+			}
+
+			log.Printf("📡 API Request: q='%s' limit=%d content=%v aiMode=%s showBrowser=%v headless=%v filters=%+v", query, limit, content, aiMode, *showBrowserFlag, *headlessFlag, reqFilters)
+			responses := runSearchPipeline(browserCtx, []string{query}, limit, *workersFlag, content, aiMode, *showBrowserFlag, *headlessFlag, reqFilters)
 			
 			w.Header().Set("Content-Type", "application/json")
 			if len(responses) > 0 {
@@ -975,7 +1411,7 @@ func main() {
 	}
 
 	log.Printf("🚀 Starting UltraSearch CLI with %d workers. Content: %v (FastAI: %v, AI Mode: %s)", *workersFlag, fetchContent, *fastAIFlag, aiMode)
-	responses := runSearchPipeline(nil, queries, *limitFlag, *workersFlag, fetchContent, aiMode, *showBrowserFlag, *headlessFlag)
+	responses := runSearchPipeline(nil, queries, *limitFlag, *workersFlag, fetchContent, aiMode, *showBrowserFlag, *headlessFlag, resolvedFilters)
 
 	// Save Output
 	if *formatFlag == "llm-dense" {
@@ -1011,7 +1447,7 @@ func formatLLMDense(responses []SearchResponse) string {
 	}
 	return sb.String()
 }
-func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxResults int, numWorkers int, fetchContent bool, aiMode string, showBrowser bool, headless bool) []SearchResponse {
+func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxResults int, numWorkers int, fetchContent bool, aiMode string, showBrowser bool, headless bool, filters SearchFilters) []SearchResponse {
 	startTotal := time.Now()
 
 	var browserCtx context.Context
@@ -1059,7 +1495,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go worker(i, queriesChan, resultsChan, browserCtx, maxResults, fetchContent, aiMode, showBrowser, headless, &wg)
+		go worker(i, queriesChan, resultsChan, browserCtx, maxResults, fetchContent, aiMode, showBrowser, headless, filters, &wg)
 	}
 
 	for _, q := range queries {
@@ -1145,7 +1581,7 @@ func runSearchPipeline(sharedBrowserCtx context.Context, queries []string, maxRe
 				var htmlDump string
 				err := chromedp.Run(tabCtx,
 					chromedp.ActionFunc(func(c context.Context) error {
-						_, err := page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(c)
+						_, err := page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(c)
 						return err
 					}),
 					chromedp.Navigate(rt.url),
@@ -1260,7 +1696,7 @@ func writeTelemetryLog(responses []SearchResponse) {
 	}
 }
 
-func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit int, showBrowser bool, headless bool) {
+func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit int, showBrowser bool, headless bool, filters SearchFilters) {
 	log.Printf("🔥 STARTING STRESS TEST: count=%d, concurrency=%d, delay=%dms, selfHeal=%v", count, concurrency, delayMs, selfHeal)
 
 	// Build a pool of different queries to rotate through
@@ -1374,7 +1810,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 				log.Printf("🔄 [W%d] Req %d/%d: Querying '%s' via direct HTTP...", workerID, idx+1, count, q)
 				
 				// Try direct HTTP Search
-				httpRes, err := runHTTPSearch(q, limit)
+				httpRes, err := runHTTPSearch(q, limit, filters)
 				
 				status := "SUCCESS"
 				healed := false
@@ -1405,7 +1841,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 							}
 							ctx, cancelTimeout := context.WithTimeout(ctx, 25*time.Second)
 							
-							searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), limit+10)
+							searchURL := BuildSearchURL(q, limit+10, filters)
 							
 							var pageURL string
 							var res []SearchResult
@@ -1438,7 +1874,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 									if err != nil {
 										return err
 									}
-									_, err = page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(ctx)
+									_, err = page.AddScriptToEvaluateOnNewDocument(GetStealthScript(filters.Language)).Do(ctx)
 									return err
 								}),
 							)
@@ -1502,7 +1938,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 								log.Printf("✅ [W%d] Self-healing SUCCESS: Fresh cookies loaded and saved. Retrying HTTP search...", workerID)
 								
 								// Retry the direct HTTP search once with fresh config
-								retryRes, retryErr := runHTTPSearch(q, limit)
+								retryRes, retryErr := runHTTPSearch(q, limit, filters)
 								if retryErr == nil {
 									status = "SUCCESS"
 									httpRes = retryRes
@@ -1519,7 +1955,7 @@ func runStressTest(count int, concurrency int, delayMs int, selfHeal bool, limit
 							// Another worker recently healed, so we reload config and retry direct HTTP search
 							log.Printf("🛡️ [W%d] CAPTCHA detected. Another worker recently self-healed, reloading session config...", workerID)
 							loadSessionConfig()
-							retryRes, retryErr := runHTTPSearch(q, limit)
+							retryRes, retryErr := runHTTPSearch(q, limit, filters)
 							if retryErr == nil {
 								status = "SUCCESS"
 								httpRes = retryRes
@@ -1699,7 +2135,7 @@ func ReplenishSessionPool(targetCount int) {
 				qIdx = -qIdx
 			}
 			q := replenishQueries[qIdx]
-			searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en", url.QueryEscape(q))
+			searchURL := BuildSearchURL(q, 10, GetReplenishFilters())
 			var pageURL string
 			var capturedHeaders map[string]string
 			var captureMu sync.Mutex
@@ -1731,7 +2167,7 @@ func ReplenishSessionPool(targetCount int) {
 					if err != nil {
 						return err
 					}
-					_, err = page.AddScriptToEvaluateOnNewDocument(solver.StealthScript).Do(c)
+					_, err = page.AddScriptToEvaluateOnNewDocument(GetStealthScript(GetReplenishFilters().Language)).Do(c)
 					return err
 				}),
 				chromedp.Navigate(searchURL),

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -333,7 +332,7 @@ func getHTTPClient() *http.Client {
 	return httpClient
 }
 
-func runHTTPSearch(q string, maxResults int) ([]SearchResult, error) {
+func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchResult, error) {
 	// Wait up to 3 seconds for a session to become available
 	session, err := poolManager.GetSessionOrWait(3 * time.Second)
 	if err != nil {
@@ -341,7 +340,7 @@ func runHTTPSearch(q string, maxResults int) ([]SearchResult, error) {
 	}
 
 	client := getHTTPClient()
-	searchURL := fmt.Sprintf("https://www.google.com/search?q=%s&hl=en&num=%d", url.QueryEscape(q), maxResults+10)
+	searchURL := BuildSearchURL(q, maxResults+10, filters)
 
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
@@ -359,7 +358,23 @@ func runHTTPSearch(q string, maxResults int) ([]SearchResult, error) {
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	}
-	if req.Header.Get("Accept-Language") == "" {
+	if filters.Language != "" && filters.Language != "browser" {
+		langs := getLanguagesForCode(filters.Language)
+		var parts []string
+		qVal := 1.0
+		for _, l := range langs {
+			if qVal == 1.0 {
+				parts = append(parts, l)
+			} else {
+				parts = append(parts, fmt.Sprintf("%s;q=%.1f", l, qVal))
+			}
+			qVal -= 0.1
+			if qVal < 0.1 {
+				qVal = 0.1
+			}
+		}
+		req.Header.Set("Accept-Language", strings.Join(parts, ","))
+	} else if req.Header.Get("Accept-Language") == "" {
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	}
 

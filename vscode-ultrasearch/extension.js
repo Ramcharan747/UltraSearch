@@ -19,6 +19,37 @@ function findBinary(workspaceFolder) {
     return 'ultrasearch';
 }
 
+function getFilterFlags() {
+    const config = vscode.workspace.getConfiguration('ultrasearch');
+    const profile = config.get('filterProfile', 'browser');
+    const hl = config.get('hl', '');
+    const gl = config.get('gl', '');
+    const uule = config.get('uule', '');
+    const safe = config.get('safe', '');
+    const tbs = config.get('tbs', '');
+
+    let flags = '';
+    if (profile && profile !== 'browser') {
+        flags += ` -filter-profile "${profile}"`;
+    }
+    if (hl) {
+        flags += ` -hl "${hl}"`;
+    }
+    if (gl) {
+        flags += ` -gl "${gl}"`;
+    }
+    if (uule) {
+        flags += ` -uule "${uule}"`;
+    }
+    if (safe) {
+        flags += ` -safe "${safe}"`;
+    }
+    if (tbs) {
+        flags += ` -tbs "${tbs}"`;
+    }
+    return flags;
+}
+
 function activate(context) {
     let disposable = vscode.commands.registerCommand('ultrasearch.search', async function () {
         const query = await vscode.window.showInputBox({
@@ -39,7 +70,7 @@ function activate(context) {
                 const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : __dirname;
                 const binaryPath = findBinary(workspaceFolder);
                 
-                const cmd = `"${binaryPath}" -query "${query}" -no-ai -output-format=llm-dense -output="${tempFile}"`;
+                const cmd = `"${binaryPath}" -query "${query}" -no-ai -output-format=llm-dense -output="${tempFile}"${getFilterFlags()}`;
                 
                 exec(cmd, (error, stdout, stderr) => {
                     if (error) {
@@ -79,7 +110,7 @@ function activate(context) {
                 const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : __dirname;
                 const binaryPath = findBinary(workspaceFolder);
                 
-                const cmd = `"${binaryPath}" -query "${query}" -fast-ai -output-format=llm-dense -output="${tempFile}"`;
+                const cmd = `"${binaryPath}" -query "${query}" -fast-ai -output-format=llm-dense -output="${tempFile}"${getFilterFlags()}`;
                 
                 exec(cmd, (error, stdout, stderr) => {
                     if (error) {
@@ -119,7 +150,7 @@ function activate(context) {
                 const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : __dirname;
                 const binaryPath = findBinary(workspaceFolder);
                 
-                const cmd = `"${binaryPath}" -query "${query}" -no-ai -content=false -output-format=llm-dense -output="${tempFile}"`;
+                const cmd = `"${binaryPath}" -query "${query}" -no-ai -content=false -output-format=llm-dense -output="${tempFile}"${getFilterFlags()}`;
                 
                 exec(cmd, (error, stdout, stderr) => {
                     if (error) {
@@ -159,7 +190,7 @@ function activate(context) {
                 const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : __dirname;
                 const binaryPath = findBinary(workspaceFolder);
                 
-                const cmd = `"${binaryPath}" -query "${query}" -only-ai -output-format=llm-dense -output="${tempFile}"`;
+                const cmd = `"${binaryPath}" -query "${query}" -only-ai -output-format=llm-dense -output="${tempFile}"${getFilterFlags()}`;
                 
                 exec(cmd, (error, stdout, stderr) => {
                     if (error) {

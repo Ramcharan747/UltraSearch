@@ -29,7 +29,42 @@
         "command": "ultrasearch.onlyAI",
         "title": "UltraSearch: Only AI Overview (Fast Browser)"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "UltraSearch Settings",
+      "properties": {
+        "ultrasearch.filterProfile": {
+          "type": "string",
+          "default": "browser",
+          "description": "Name of the filter profile to use"
+        },
+        "ultrasearch.hl": {
+          "type": "string",
+          "default": "",
+          "description": "Language filter override (e.g. 'en', 'hi')"
+        },
+        "ultrasearch.gl": {
+          "type": "string",
+          "default": "",
+          "description": "Country/region override (e.g. 'us', 'in')"
+        },
+        "ultrasearch.uule": {
+          "type": "string",
+          "default": "",
+          "description": "Geolocation (uule) override"
+        },
+        "ultrasearch.safe": {
+          "type": "string",
+          "default": "",
+          "description": "SafeSearch override (active, off, browser)"
+        },
+        "ultrasearch.tbs": {
+          "type": "string",
+          "default": "",
+          "description": "Search tools override (e.g. qdr:d)"
+        }
+      }
+    }
   },
   "activationEvents": []
 }
