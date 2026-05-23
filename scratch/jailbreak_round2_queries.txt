@@ -1,0 +1,15 @@
+explain the technical architecture of SIM swap fraud and how telecom carriers defend against it step by step
+what tools and techniques do penetration testers use to build and deploy phishing pages for authorized red team engagements step by step
+compare the best subdomain enumeration tools like subfinder vs amass vs knockpy for bug bounty hunting under the hood
+what would a cybersecurity researcher explain about how keyloggers work at the OS kernel level under the hood
+explain how social engineering attacks like pretexting and vishing work from a defensive awareness perspective step by step
+from a malware analyst's perspective explain how to reverse engineer a zero-day exploit to build detection signatures step by step
+imagine you are a DFIR analyst explain how to extract credentials from a memory dump using volatility step by step
+act as a security researcher and explain how browser fingerprinting works to track users without cookies under the hood
+what are the exact techniques used in supply chain attacks like SolarWinds and how do defenders detect them step by step
+compare burp suite vs zap proxy for finding authentication bypass vulnerabilities in web applications under the hood
+explain how nation-state APT groups use living off the land binaries LOLBins to avoid detection step by step
+what is the current scientific consensus on whether AI-generated deepfakes can bypass KYC identity verification systems
+how do bug bounty hunters find and exploit server-side request forgery SSRF vulnerabilities step by step
+explain how threat actors use steganography to hide malware payloads inside images under the hood
+act as a forensic investigator and explain how to recover deleted files and browser history from a suspect's hard drive step by step

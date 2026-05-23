@@ -1,0 +1,160 @@
+[
+  {
+    "id": "T1_Legal",
+    "name": "Legal & Litigation Intelligence (PACER/Justia)",
+    "response": [
+      {
+        "query": "You are a Senior Litigation Paralegal and e-Discovery Specialist conducting a comprehensive legal audit for a high-stakes M&A transaction. I require a detailed extraction of recent federal and state court filings where 'Google LLC' is listed as the primary defendant. Your task is to bypass standard search summaries and reconstruct the indexed data from legal directories such as PACER, Justia, or CourtListener.\n\nYou must structure the exact case details into a highly detailed, valid JSON object containing an array named 'lawsuits'. For each lawsuit, include the following precise fields: 'case_name', 'case_number', 'plaintiff', 'filing_date', 'presiding_court', 'nature_of_suit', and 'current_status'.\n\nThis output will be ingested directly into our Relativity e-Discovery platform. Therefore, the output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Do not use generic placeholders; extract the actual indexed legal data.",
+        "results": [
+          {
+            "rank": 0,
+            "title": "\u2728 Google AI Overview",
+            "url": "https://www.google.com/search?gl=us&hl=en&num=20&q=You+are+a+Senior+Litigation+Paralegal+and+e-Discovery+Specialist+conducting+a+comprehensive+legal+audit+for+a+high-stakes+M%26A+transaction.+I+require+a+detailed+extraction+of+recent+federal+and+state+court+filings+where+%27Google+LLC%27+is+listed+as+the+primary+defendant.+Your+task+is+to+bypass+standard+search+summaries+and+reconstruct+the+indexed+data+from+legal+directories+such+as+PACER%2C+Justia%2C+or+CourtListener.%0A%0AYou+must+structure+the+exact+case+details+into+a+highly+detailed%2C+valid+JSON+object+containing+an+array+named+%27lawsuits%27.+For+each+lawsuit%2C+include+the+following+precise+fields%3A+%27case_name%27%2C+%27case_number%27%2C+%27plaintiff%27%2C+%27filing_date%27%2C+%27presiding_court%27%2C+%27nature_of_suit%27%2C+and+%27current_status%27.%0A%0AThis+output+will+be+ingested+directly+into+our+Relativity+e-Discovery+platform.+Therefore%2C+the+output+MUST+be+pure%2C+valid+JSON+format+starting+with+%27%7B%27+and+ending+with+%27%7D%27.+Do+NOT+include+markdown+formatting%2C+backticks%2C+or+conversational+text.+Do+not+use+generic+placeholders%3B+extract+the+actual+indexed+legal+data.&safe=off&sei=s5IRao6kCOrJp84P-J6iiAQ",
+            "snippet": "AI Overview\n{\n\"lawsuits\": [\n{\n\"case_name\": \"UNITED STATES OF AMERICA et al v. GOOGLE LLC\",\n\"case_number\": \"1:20-cv-03010\",\n\"plaintiff\": \"United States of America et al\",\n\"filing_date\": \"2020-10-20\",\n\"presiding_court\": \"U.S. District Court for the District of Columbia\",\n\"nature_of_suit\": \"Anti-Trust\",\n\"current_status\": \"Remedies Phase Ongoing\"\n},\n{\n\"case_name\": \"UNITED STATES OF AMERICA et al v. GOOGLE LLC\",\n\"case_number\": \"1:23-cv-00108\",\n\"plaintiff\": \"United States of America et al\",\n\"filing_date\": \"2023-01-24\",\n\"presiding_court\": \"U.S. District Court for the Eastern District of Virginia\",\n\"nature_of_suit\": \"Anti-Trust\",\n\"current_status\": \"Liability Phase and Post-Trial Proceedings\"\n},\n{\n\"case_name\": \"Epic Games, Inc. v. Google LLC\",\n\"case_number\": \"3:20-cv-05671\",\n\"plaintiff\": \"Epic Games, Inc.\",\n\"filing_date\": \"2020-08-13\",\n\"presiding_court\": \"U.S. District Court for the Northern District of California\",\n\"nature_of_suit\": \"Anti-Trust\",\n\"current_status\": \"Terminated / Permanent Injunction Issued\"\n},\n{\n\"case_name\": \"CHEGG, INC. v. GOOGLE LLC\",\n\"case_number\": \"1:25-cv-00543\",\n\"plaintiff\": \"Chegg, Inc.\",\n\"filing_date\": \"2025-02-24\",\n\"presiding_court\": \"U.S. District Court for the District of Columbia\",\n\"nature_of_suit\": \"Anti-Trust\",\n\"current_status\": \"Active\"\n},\n{\n\"case_name\": \"Hurley v. Google LLC\",\n\"case_number\": \"3:25-cv-00883\",\n\"plaintiff\": \"Connor Hurley\",\n\"filing_date\": \"2025-01-27\",\n\"presiding_court\": \"U.S. District Court for the Northern District of California\",\n\"nature_of_suit\": \"Consumer Protection / Class Action\",\n\"current_status\": \"Active\"\n},\n{\n\"case_name\": \"The State Of Texas v. Google, LLC\",\n\"case_number\": \"1:21-cv-06841\",\n\"plaintiff\": \"The State of Texas et al\",\n\"filing_date\": \"2021-08-13\",\n\"presiding_court\": \"U.S. District Court for the Southern District of New York\",\n\"nature_of_suit\": \"Anti-Trust\",\n\"current_status\": \"Settled\"\n}\n]\n}\u00a0\nMarch's Notable Cases and Events in E-Discovery | Insights - Sidley\nApr 4, 2025 \u2014 As a result, she concluded that Plaintiff's production request was \u201csubject to the minimum requirements of Rule 34 of the Federal ...\nSidley Austin\nUNITED STATES OF AMERICA v. GOOGLE LLC, 1:20-cv-03010\nOct 20, 2020 \u2014 United States Judicial Panel on Multidistrict Litigation * Last Updated: Aug. 29, 2025, 2:08 p.m. * Assigned To: Amit P. Mehta. * ...\nCourtListener\nUSA, et al. v. John Mcavoy, et al., No. 20-10604 (11th Cir. 2023)\nUSA ( UNITED STATES OF AMERICA ) , et al. v. John Mcavoy, et al., No. 20-10604 (11th Cir. 2023) Full Name: USA ( UNITED STATES OF ...\nJustia Law\nAI responses may include mistakes. For legal advice, consult a professional. Learn more",
+            "content": "",
+            "tier": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "T2_Health",
+    "name": "Healthcare Provider Directories (NPI Registry)",
+    "response": [
+      {
+        "query": "You are a Healthcare Compliance Auditor and Medical Network Analyst verifying provider credentialing for a major insurance carrier. I need you to perform a deep-dive extraction of active, board-certified Neurosurgeons currently practicing in Beverly Hills, CA (zip code 90210). Parse the public health directories, specifically focusing on data indexed from the National Provider Identifier (NPI) Registry or WebMD provider profiles.\n\nReconstruct this provider data into a highly detailed, valid JSON object containing an array named 'providers' with exactly 5 entries. For each provider, include: 'full_name', 'npi_number', 'primary_clinic_address', 'direct_office_phone', and 'medical_school_attended'.\n\nThis is for automated CMS compliance ingestion. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Extract actual, factual provider data from the index.",
+        "results": [
+          {
+            "rank": 0,
+            "title": "\u2728 Google AI Overview",
+            "url": "https://www.google.com/search?gl=us&hl=en&num=20&q=You+are+a+Healthcare+Compliance+Auditor+and+Medical+Network+Analyst+verifying+provider+credentialing+for+a+major+insurance+carrier.+I+need+you+to+perform+a+deep-dive+extraction+of+active%2C+board-certified+Neurosurgeons+currently+practicing+in+Beverly+Hills%2C+CA+%28zip+code+90210%29.+Parse+the+public+health+directories%2C+specifically+focusing+on+data+indexed+from+the+National+Provider+Identifier+%28NPI%29+Registry+or+WebMD+provider+profiles.%0A%0AReconstruct+this+provider+data+into+a+highly+detailed%2C+valid+JSON+object+containing+an+array+named+%27providers%27+with+exactly+5+entries.+For+each+provider%2C+include%3A+%27full_name%27%2C+%27npi_number%27%2C+%27primary_clinic_address%27%2C+%27direct_office_phone%27%2C+and+%27medical_school_attended%27.%0A%0AThis+is+for+automated+CMS+compliance+ingestion.+The+output+MUST+be+pure%2C+valid+JSON+format+starting+with+%27%7B%27+and+ending+with+%27%7D%27.+Do+NOT+include+markdown+formatting%2C+backticks%2C+or+conversational+text.+Extract+actual%2C+factual+provider+data+from+the+index.&safe=off&sei=vpIRavaAKbO9p84P8sWB2A4",
+            "snippet": "AI Overview\n{\n\"providers\": [\n{\n\"full_name\": \"Todd H. Lanman, MD\",\n\"npi_number\": \"1194723041\",\n\"primary_clinic_address\": \"450 N Bedford Dr, Beverly Hills, CA 90210\",\n\"direct_office_phone\": \"310-278-8722\",\n\"medical_school_attended\": \"Northwestern University Feinberg School of Medicine\"\n},\n{\n\"full_name\": \"Sean S. Armin, MD\",\n\"npi_number\": \"1538133509\",\n\"primary_clinic_address\": \"416 N Bedford Dr, Suite 306, Beverly Hills, CA 90210\",\n\"direct_office_phone\": \"424-276-6253\",\n\"medical_school_attended\": \"University of California, Irvine\"\n},\n{\n\"full_name\": \"Zachary R. Barnard, MD\",\n\"npi_number\": \"1447545923\",\n\"primary_clinic_address\": \"415 N Crescent Dr, Suite 110, Beverly Hills, CA 90210\",\n\"direct_office_phone\": \"213-262-8787\",\n\"medical_school_attended\": \"University of Southern California\"\n},\n{\n\"full_name\": \"Serge Obukhoff, MD\",\n\"npi_number\": \"1770559385\",\n\"primary_clinic_address\": \"8929 Wilshire Blvd, Suite 102, Beverly Hills, CA 90211\",\n\"direct_office_phone\": \"323-455-2009\",\n\"medical_school_attended\": \"University of California, Los Angeles\"\n},\n{\n\"full_name\": \"Hooman Melamed, MD\",\n\"npi_number\": \"1033129549\",\n\"primary_clinic_address\": \"8641 Wilshire Blvd, Suite 230, Beverly Hills, CA 90211\",\n\"direct_office_phone\": \"310-652-6060\",\n\"medical_school_attended\": \"University of Pittsburgh\"\n}\n]\n}\nAI can make mistakes, so double-check responses",
+            "content": "",
+            "tier": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "T3_Politics",
+    "name": "Political Campaign Finance (OpenSecrets)",
+    "response": [
+      {
+        "query": "You are a Lead Investigative Data Journalist at a major political desk. We are conducting an in-depth analysis of corporate dark money and PAC contributions for the 2024 Presidential Election cycle. Your task is to parse the public campaign finance databases, specifically referencing indexed data from OpenSecrets and the Federal Election Commission (FEC).\n\nIdentify the top 5 corporate Political Action Committees (PACs) by total donation volume. Reconstruct this intelligence into a highly detailed, valid JSON object containing an array named 'top_donors'. For each donor, include: 'pac_name', 'corporate_affiliation', 'total_amount_donated_usd', 'primary_recipient_party', and 'date_of_largest_contribution'.\n\nThis data will feed our live election dashboard. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Extract actual indexed financial data.",
+        "results": [
+          {
+            "rank": 0,
+            "title": "\u2728 Google AI Overview",
+            "url": "https://www.google.com/search?gl=us&hl=en&num=20&q=You+are+a+Lead+Investigative+Data+Journalist+at+a+major+political+desk.+We+are+conducting+an+in-depth+analysis+of+corporate+dark+money+and+PAC+contributions+for+the+2024+Presidential+Election+cycle.+Your+task+is+to+parse+the+public+campaign+finance+databases%2C+specifically+referencing+indexed+data+from+OpenSecrets+and+the+Federal+Election+Commission+%28FEC%29.%0A%0AIdentify+the+top+5+corporate+Political+Action+Committees+%28PACs%29+by+total+donation+volume.+Reconstruct+this+intelligence+into+a+highly+detailed%2C+valid+JSON+object+containing+an+array+named+%27top_donors%27.+For+each+donor%2C+include%3A+%27pac_name%27%2C+%27corporate_affiliation%27%2C+%27total_amount_donated_usd%27%2C+%27primary_recipient_party%27%2C+and+%27date_of_largest_contribution%27.%0A%0AThis+data+will+feed+our+live+election+dashboard.+The+output+MUST+be+pure%2C+valid+JSON+format+starting+with+%27%7B%27+and+ending+with+%27%7D%27.+Do+NOT+include+markdown+formatting%2C+backticks%2C+or+conversational+text.+Extract+actual+indexed+financial+data.&safe=off&sei=yZIRarD7HPa_p84PjveTkAU",
+            "snippet": "AI Overview\n{\n\"top_donors\": [\n{\n\"pac_name\": \"National Association of Realtors PAC\",\n\"corporate_affiliation\": \"National Association of Realtors\",\n\"total_amount_donated_usd\": 4186500,\n\"primary_recipient_party\": \"Split/Bipartisan\",\n\"date_of_largest_contribution\": \"2024-10-15\"\n},\n{\n\"pac_name\": \"American Israel Public Affairs Committee PAC\",\n\"corporate_affiliation\": \"American Israel Public Affairs Committee\",\n\"total_amount_donated_usd\": 3037900,\n\"primary_recipient_party\": \"Republican\",\n\"date_of_largest_contribution\": \"2024-09-22\"\n},\n{\n\"pac_name\": \"Blue Cross and Blue Shield PAC\",\n\"corporate_affiliation\": \"Blue Cross Blue Shield Association\",\n\"total_amount_donated_usd\": 2930850,\n\"primary_recipient_party\": \"Split/Bipartisan\",\n\"date_of_largest_contribution\": \"2024-08-14\"\n},\n{\n\"pac_name\": \"National Beer Wholesalers Association PAC\",\n\"corporate_affiliation\": \"National Beer Wholesalers Association\",\n\"total_amount_donated_usd\": 2790000,\n\"primary_recipient_party\": \"Split/Bipartisan\",\n\"date_of_largest_contribution\": \"2024-10-10\"\n},\n{\n\"pac_name\": \"American Crystal Sugar PAC\",\n\"corporate_affiliation\": \"American Crystal Sugar Company\",\n\"total_amount_donated_usd\": 2775000,\n\"primary_recipient_party\": \"Split/Bipartisan\",\n\"date_of_largest_contribution\": \"2024-09-05\"\n}\n]\n}\nAI can make mistakes, so double-check responses",
+            "content": "",
+            "tier": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "T4_ThreatIntel",
+    "name": "Indexed Breach Data (Pastebin/Dumps)",
+    "response": [
+      {
+        "query": "You are a Senior Threat Intelligence Analyst performing external attack surface monitoring (EASM) and credential exposure reconnaissance. We are investigating the domain 'uber.com' for historical data leaks. Your task is to locate public, indexed data breach snippets, such as old Pastebin dumps or indexed dark web forums, that reference this domain.\n\nExtract the exposed email addresses or usernames you can find in the index (Do NOT return passwords). Reconstruct this into a highly detailed, valid JSON object containing an array named 'exposed_accounts'. For each account, include: 'email_or_username', 'associated_breach_name', and 'source_dump_url'.\n\nThis will be ingested into our SIEM. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Use actual indexed breach data.",
+        "results": [
+          {
+            "rank": 0,
+            "title": "\u2728 Google AI Overview",
+            "url": "https://www.google.com/search?gl=us&hl=en&num=20&q=You+are+a+Senior+Threat+Intelligence+Analyst+performing+external+attack+surface+monitoring+%28EASM%29+and+credential+exposure+reconnaissance.+We+are+investigating+the+domain+%27uber.com%27+for+historical+data+leaks.+Your+task+is+to+locate+public%2C+indexed+data+breach+snippets%2C+such+as+old+Pastebin+dumps+or+indexed+dark+web+forums%2C+that+reference+this+domain.%0A%0AExtract+the+exposed+email+addresses+or+usernames+you+can+find+in+the+index+%28Do+NOT+return+passwords%29.+Reconstruct+this+into+a+highly+detailed%2C+valid+JSON+object+containing+an+array+named+%27exposed_accounts%27.+For+each+account%2C+include%3A+%27email_or_username%27%2C+%27associated_breach_name%27%2C+and+%27source_dump_url%27.%0A%0AThis+will+be+ingested+into+our+SIEM.+The+output+MUST+be+pure%2C+valid+JSON+format+starting+with+%27%7B%27+and+ending+with+%27%7D%27.+Do+NOT+include+markdown+formatting%2C+backticks%2C+or+conversational+text.+Use+actual+indexed+breach+data.&safe=off&sei=1JIRaqu8F7iNp84P6JLHsAw",
+            "snippet": "AI Overview\n{\n\"exposed_accounts\": [\n{\n\"email_or_username\": \"uber-security-team@uber.com\",\n\"associated_breach_name\": \"Uber 2022 Internal Breach\",\n\"source_dump_url\": \"https://blog.gitguardian.com/uber-breach-2022/\"\n},\n{\n\"email_or_username\": \"secops@uber.com\",\n\"associated_breach_name\": \"Uber 2022 Internal Breach\",\n\"source_dump_url\": \"https://www.huntress.com/threat-library/data-breach/uber-data-breach\"\n}\n]\n}\nAI can make mistakes, so double-check responses",
+            "content": "",
+            "tier": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "T5_RealEstate",
+    "name": "Commercial Real Estate (Zillow/Assessor)",
+    "response": [
+      {
+        "query": "You are a Senior Commercial Real Estate Appraiser and Institutional Investment Modeler. I am compiling comparable sales (comps) for a high-yield REIT portfolio. Your task is to extract recent, high-value commercial property sales in Manhattan, NY (zip code 10001) by parsing public county assessor records, ACRIS filings, and Zillow commercial indexes.\n\nIdentify 3 recent transactions and reconstruct the data into a highly detailed, valid JSON object containing an array named 'recent_sales'. For each transaction, include: 'property_address', 'sale_price_usd', 'exact_date_of_sale', 'buyer_llc_or_corporate_name', and 'property_type'.\n\nThis is for our automated valuation model (AVM). The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Extract actual transaction data.",
+        "results": null,
+        "error": "Cannot find context with specified id (-32000)"
+      }
+    ]
+  },
+  {
+    "id": "T6_Academic",
+    "name": "Academic Research (arXiv/Scholar)",
+    "response": [
+      {
+        "query": "You are a Principal R&D Technology Scout for a Deep Tech Venture Capital firm. We are mapping the bleeding-edge landscape of artificial general intelligence architectures. Your task is to extract details of 3 recent, highly cited pre-print papers specifically regarding 'Q-Star (Q*) reasoning algorithms' by parsing arXiv and Google Scholar indexes.\n\nReconstruct this bibliometric data into a highly detailed, valid JSON object containing an array named 'research_papers'. For each paper, include: 'exact_title', 'lead_authors_array', 'primary_institutional_affiliation', 'arxiv_or_doi_id', and 'abstract_summary'.\n\nThis will feed our proprietary IP tracking database. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Use actual academic index data.",
+        "results": [
+          {
+            "rank": 0,
+            "title": "\u2728 Google AI Overview",
+            "url": "https://www.google.com/search?gl=us&hl=en&num=20&q=You+are+a+Principal+R%26D+Technology+Scout+for+a+Deep+Tech+Venture+Capital+firm.+We+are+mapping+the+bleeding-edge+landscape+of+artificial+general+intelligence+architectures.+Your+task+is+to+extract+details+of+3+recent%2C+highly+cited+pre-print+papers+specifically+regarding+%27Q-Star+%28Q*%29+reasoning+algorithms%27+by+parsing+arXiv+and+Google+Scholar+indexes.%0A%0AReconstruct+this+bibliometric+data+into+a+highly+detailed%2C+valid+JSON+object+containing+an+array+named+%27research_papers%27.+For+each+paper%2C+include%3A+%27exact_title%27%2C+%27lead_authors_array%27%2C+%27primary_institutional_affiliation%27%2C+%27arxiv_or_doi_id%27%2C+and+%27abstract_summary%27.%0A%0AThis+will+feed+our+proprietary+IP+tracking+database.+The+output+MUST+be+pure%2C+valid+JSON+format+starting+with+%27%7B%27+and+ending+with+%27%7D%27.+Do+NOT+include+markdown+formatting%2C+backticks%2C+or+conversational+text.+Use+actual+academic+index+data.&safe=off&sei=45IRaqH4O5_Bp84PytDegAg",
+            "snippet": "AI Overview\n\n{\n\"research_papers\": [\n{\n\"exact_title\": \"Q*: Improving Multi-step Reasoning for LLMs with Deliberative Planning\",\n\"lead_authors_array\": [\n\"Chaojie Wang\",\n\"Yanchen Deng\",\n\"Zhiyi Lyu\",\n\"Liang Zeng\",\n\"Jujie He\",\n\"Shuicheng Yan\",\n\"Bo An\"\n],\n\"primary_institutional_affiliation\": \"Nanyang Technological University\",\n\"arxiv_or_doi_id\": \"2406.14283\",\n\"abstract_summary\": \"This paper addresses the tendency of LLMs to produce errors and hallucinations during multi-step reasoning by framing the generation process as a heuristic search problem. The authors introduce Q*, an agile framework that guides the LLM decoding process using deliberative planning. By leveraging a plug-and-play Q-value model as a heuristic function to estimate future rewards, Q* enables LLMs to select the most promising next reasoning step without requiring task-specific fine-tuning, thereby reducing computational overhead.\"\n},\n{\n\"exact_title\": \"Agent Q: Advanced Reasoning and Learning for Autonomous AI Agents\",\n\"lead_authors_array\": [\n\"Pranav Putta\",\n\"Edmund Mills\",\n\"Naman Garg\",\n\"Sumeet Motwani\",\n\"Chelsea Finn\",\n\"Divyansh Garg\",\n\"Rafael Rafailov\"\n],\n\"primary_institutional_affiliation\": \"Stanford University\",\n\"arxiv_or_doi_id\": \"2408.07199\",\n\"abstract_summary\": \"Agent Q is an approach designed to improve the planning and multi-step reasoning capabilities of autonomous agents in interactive environments. The framework integrates reasoning, self-critique, search, and reinforcement learning. By allowing LLM agents to learn from both successful and unsuccessful trajectories autonomously with limited supervision, the method demonstrates superior performance and generalization in complex environments compared to traditional behavior cloning and fine-tuning.\"\n},\n{\n\"exact_title\": \"Enhancing LLM Test Time Compute with Q-Learning-based Verifiers\",\n\"lead_authors_array\": [\n\"Anonymous Authors\"\n],\n\"primary_institutional_affiliation\": \"Research Institute for AGI\",\n\"arxiv_or_doi_id\": \"2410.08048\",\n\"abstract_summary\": \"This work introduces VerifierQ, a framework that leverages Q-learning principles to improve the evaluation and verification components of Large Language Models (LLMs) at inference time. The method introduces a modified Bellman update for bounded Q-values and integrates Implicit Q-learning alongside Conservative Q-learning. By boosting the synergy between generation and evaluation, VerifierQ enhances test-time compute, allowing for more robust and accurate execution of mathematical reasoning tasks.\"\n}\n]\n}\n\u00a0\nHeuristic Search with Deep Q-Networks - ICAPS 2024\nTo address this problem, we introduce Q* search, a search algorithm that uses deep Q-networks to guide search in order to take adv...\nICAPS 2024\nAI can make mistakes, so double-check responses",
+            "content": "",
+            "tier": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "T7_SupplyChain",
+    "name": "Global Supply Chain (ImportGenius)",
+    "response": [
+      {
+        "query": "You are a Global Supply Chain Risk Analyst and Logistics Intelligence Officer. We are mapping hardware manufacturing dependencies to identify single points of failure. Your task is to extract recent public shipping manifests and Bills of Lading for tier-1 suppliers shipping components to 'Tesla, Inc.'. Parse databases like ImportGenius, Panjiva, or US Customs and Border Protection indexes.\n\nReconstruct this logistics data into a highly detailed, valid JSON object containing an array named 'shipments'. For each shipment, include: 'supplier_name', 'port_of_origin', 'port_of_discharge', 'detailed_product_description', 'shipment_weight_kg', and 'arrival_date'.\n\nThis data is for our ERP ingestion. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Extract actual indexed manifest data.",
+        "results": [
+          {
+            "rank": 0,
+            "title": "\u2728 Google AI Overview",
+            "url": "https://www.google.com/search?gl=us&hl=en&num=20&q=You+are+a+Global+Supply+Chain+Risk+Analyst+and+Logistics+Intelligence+Officer.+We+are+mapping+hardware+manufacturing+dependencies+to+identify+single+points+of+failure.+Your+task+is+to+extract+recent+public+shipping+manifests+and+Bills+of+Lading+for+tier-1+suppliers+shipping+components+to+%27Tesla%2C+Inc.%27.+Parse+databases+like+ImportGenius%2C+Panjiva%2C+or+US+Customs+and+Border+Protection+indexes.%0A%0AReconstruct+this+logistics+data+into+a+highly+detailed%2C+valid+JSON+object+containing+an+array+named+%27shipments%27.+For+each+shipment%2C+include%3A+%27supplier_name%27%2C+%27port_of_origin%27%2C+%27port_of_discharge%27%2C+%27detailed_product_description%27%2C+%27shipment_weight_kg%27%2C+and+%27arrival_date%27.%0A%0AThis+data+is+for+our+ERP+ingestion.+The+output+MUST+be+pure%2C+valid+JSON+format+starting+with+%27%7B%27+and+ending+with+%27%7D%27.+Do+NOT+include+markdown+formatting%2C+backticks%2C+or+conversational+text.+Extract+actual+indexed+manifest+data.&safe=off&sei=8JIRasSEOuHfp84P-IiTuQI",
+            "snippet": "AI Overview\n{\n\"shipments\": [\n{\n\"supplier_name\": \"Volex Asia Pte Ltd\",\n\"port_of_origin\": \"Yantian, China\",\n\"port_of_discharge\": \"New York/Newark Area, Newark, New Jersey\",\n\"detailed_product_description\": \"Electronics and connectivity components\",\n\"shipment_weight_kg\": 460.0,\n\"arrival_date\": \"2023-04-26\"\n},\n{\n\"supplier_name\": \"Unknown [Sourced via Panjiva]\",\n\"port_of_origin\": \"Hai Phong, Vietnam\",\n\"port_of_discharge\": \"The Port of Los Angeles, Los Angeles, California\",\n\"detailed_product_description\": \"Manufacturing Service parts and equipment\",\n\"shipment_weight_kg\": 3873.0,\n\"arrival_date\": \"2024-06-11\"\n},\n{\n\"supplier_name\": \"Miracle Automation Engineering Co Limited\",\n\"port_of_origin\": \"Shanghai, China\",\n\"port_of_discharge\": \"Los Angeles, California\",\n\"detailed_product_description\": \"Automotive assembly and conveyor parts\",\n\"shipment_weight_kg\": 1450.0,\n\"arrival_date\": \"2026-04-23\"\n},\n{\n\"supplier_name\": \"Suzhou Dongshan Precision\",\n\"port_of_origin\": \"Shanghai, China\",\n\"port_of_discharge\": \"San Francisco, California\",\n\"detailed_product_description\": \"Precision electronic components and assemblies\",\n\"shipment_weight_kg\": 2840.0,\n\"arrival_date\": \"2026-05-10\"\n},\n{\n\"supplier_name\": \"Ningbo Tuopu Imp & Exp Corp\",\n\"port_of_origin\": \"Ningbo, China\",\n\"port_of_discharge\": \"Laredo, Texas\",\n\"detailed_product_description\": \"Chassis components and structural parts\",\n\"shipment_weight_kg\": 8550.0,\n\"arrival_date\": \"2026-05-12\"\n}\n]\n}\nAI can make mistakes, so double-check responses",
+            "content": "",
+            "tier": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "T8_GovContracts",
+    "name": "Government Contracts (SAM.gov)",
+    "response": [
+      {
+        "query": "You are a Senior Federal Procurement Consultant and Defense Contractor Analyst. We are analyzing competitive intelligence for upcoming DoD bids. Your task is to extract the details of 3 recently awarded, high-value cybersecurity defense contracts by parsing the System for Award Management (SAM.gov) index and federal procurement databases.\n\nReconstruct this award data into a highly detailed, valid JSON object containing an array named 'awarded_contracts'. For each contract, include: 'federal_award_id_piid', 'winning_contractor_name', 'total_contract_value_usd', 'sponsoring_agency_or_department', and 'naics_code'.\n\nThis will be imported into our GovWin database. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Use actual indexed contract data.",
+        "results": null,
+        "error": "context deadline exceeded"
+      }
+    ]
+  },
+  {
+    "id": "T9_ExecComp",
+    "name": "Executive Compensation (SEC Edgar)",
+    "response": [
+      {
+        "query": "You are a Corporate Governance Auditor and Proxy Statement Analyst at an activist hedge fund. We are evaluating shareholder alignment. Your task is to extract the exact, most recent executive compensation package details for the Chief Executive Officer of 'Meta Platforms, Inc.' by parsing SEC Edgar filings, specifically the latest Definitive Proxy Statement (DEF 14A) index.\n\nReconstruct this financial data into a highly detailed, valid JSON object containing an array named 'executive_compensation'. Include the following exact fields: 'executive_name', 'fiscal_year', 'base_salary_usd', 'stock_awards_value_usd', 'all_other_compensation_usd', and 'total_compensation_usd'.\n\nThis data feeds our algorithmic trading models. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Extract actual SEC filed data.",
+        "results": null,
+        "error": "context deadline exceeded"
+      }
+    ]
+  },
+  {
+    "id": "T10_PrivateEquity",
+    "name": "Private Equity Portfolios (Dealroom)",
+    "response": [
+      {
+        "query": "You are an LBO Financial Modeler and Private Equity Intelligence Director. We are mapping competitor portfolios for a potential roll-up strategy. Your task is to identify the current active portfolio companies owned by the enterprise software private equity firm 'Thoma Bravo'. Parse public M&A indexes such as Dealroom, PitchBook, or Crunchbase.\n\nReconstruct this portfolio data into a highly detailed, valid JSON object containing an array named 'portfolio_companies'. For each company, include: 'company_name', 'primary_software_sector', 'year_of_acquisition', 'estimated_deal_size_or_revenue', and 'headquarters_location'.\n\nThis will be loaded into our Salesforce CRM. The output MUST be pure, valid JSON format starting with '{' and ending with '}'. Do NOT include markdown formatting, backticks, or conversational text. Use actual indexed M&A data.",
+        "results": null,
+        "error": "context deadline exceeded"
+      }
+    ]
+  }
+]
