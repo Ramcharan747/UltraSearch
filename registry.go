@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // SkillBook represents a parsed community or core declarative schema template
@@ -20,29 +22,35 @@ type SkillBook struct {
 	RawContent string   `json:"-"`
 }
 
-// Global dynamic Skill Book catalog registry
-var GlobalRegistry []SkillBook
+// Global dynamic Skill Book catalog registry protected by a Read-Write Mutex
+var (
+	registryMutex  sync.RWMutex
+	GlobalRegistry []SkillBook
+)
 
 // LoadSkillBookRegistry reads and catalogs all active Skill Books from the target directory
 func LoadSkillBookRegistry(dirPath string) error {
+	registryMutex.Lock()
+	defer registryMutex.Unlock()
+
 	GlobalRegistry = nil
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
 		return fmt.Errorf("skill book directory '%s' does not exist", dirPath)
 	}
 
+	var tempRegistry []SkillBook
 	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !d.IsDir() && filepath.Ext(path) == ".md" {
-			// Skip directories like "unverified" in walk, we load them separately if needed
 			if strings.Contains(path, "/unverified/") {
 				return nil
 			}
 
 			sb, err := ParseSkillBookFile(path)
 			if err == nil {
-				GlobalRegistry = append(GlobalRegistry, sb)
+				tempRegistry = append(tempRegistry, sb)
 			} else {
 				log.Printf("⚠️ [WI-OS Registry] Skipping invalid skill book %s: %v", filepath.Base(path), err)
 			}
@@ -51,9 +59,54 @@ func LoadSkillBookRegistry(dirPath string) error {
 	})
 
 	if err == nil {
+		GlobalRegistry = tempRegistry
 		log.Printf("📚 [WI-OS Registry] Cataloged %d active Skill Books into edge memory.", len(GlobalRegistry))
 	}
 	return err
+}
+
+// StartRegistryWatcher spins up a background goroutine polling for Skill Book changes
+func StartRegistryWatcher(dirPath string, interval time.Duration) {
+	go func() {
+		lastState := getDirState(dirPath)
+		for {
+			time.Sleep(interval)
+			currentState := getDirState(dirPath)
+			if currentState != "" && currentState != lastState {
+				log.Printf("🔄 [WI-OS Registry] Filesystem change detected in '%s'. Hot-reloading active catalogs...", dirPath)
+				err := LoadSkillBookRegistry(dirPath)
+				if err == nil {
+					lastState = currentState
+				} else {
+					log.Printf("⚠️ [WI-OS Registry] Hot-reload failed: %v", err)
+				}
+			}
+		}
+	}()
+}
+
+// getDirState compiles file count and modification hashes to detect directory changes
+func getDirState(dirPath string) string {
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return ""
+	}
+
+	var totalSize int64
+	var totalTime int64
+	fileCount := 0
+
+	for _, f := range files {
+		if !f.IsDir() && filepath.Ext(f.Name()) == ".md" {
+			info, err := f.Info()
+			if err == nil {
+				fileCount++
+				totalSize += info.Size()
+				totalTime += info.ModTime().UnixNano()
+			}
+		}
+	}
+	return fmt.Sprintf("count:%d|size:%d|time:%d", fileCount, totalSize, totalTime)
 }
 
 // ParseSkillBookFile opens a markdown Skill Book, extracts Frontmatter, and returns a SkillBook object
@@ -130,6 +183,9 @@ func ParseSkillBookFile(filePath string) (SkillBook, error) {
 
 // SemanticRouteQuery maps an incoming natural query to the best-fit Skill Book schema (Resolving Scale)
 func SemanticRouteQuery(queryText string) (SkillBook, float64, bool) {
+	registryMutex.RLock()
+	defer registryMutex.RUnlock()
+
 	if len(GlobalRegistry) == 0 {
 		return SkillBook{}, 0.0, false
 	}

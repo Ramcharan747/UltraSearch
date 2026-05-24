@@ -1306,6 +1306,7 @@ func main() {
 	integrateSkillFlag := flag.String("integrate-skill", "", "Integrate a community Skill Book template (Sandbox intake)")
 	promoteSkillFlag := flag.String("promote-skill", "", "Promote a staged Skill Book to the active engine (Human-in-the-loop verification)")
 	listStagedFlag := flag.Bool("list-staged", false, "List all staged Skill Books awaiting human promotion")
+	installFlag := flag.String("install", "", "Install a community Skill Book template from a GitHub URL")
 	
 	flag.Parse()
 
@@ -1347,6 +1348,20 @@ func main() {
 		for _, f := range list {
 			fmt.Printf("  - %s\n", f)
 		}
+		return
+	}
+
+	if *installFlag != "" {
+		cg := NewContributionGateway("ai_skills", filepath.Join("ai_skills", "unverified"))
+		staged, err := cg.DownloadCommunitySkill(*installFlag)
+		if err != nil {
+			log.Fatalf("❌ Installation failed: %v", err)
+		}
+		fmt.Printf("🎉 Successfully installed community templates into staging area:\n")
+		for _, f := range staged {
+			fmt.Printf("  - Staged: %s (ai_skills/unverified/%s)\n", f, f)
+		}
+		fmt.Println("📬 Awaiting human review. Promote them to the active catalog via: ./ultrasearch -promote-skill <filename>")
 		return
 	}
 
@@ -1421,7 +1436,7 @@ func main() {
 		type USQLResponse struct {
 			Query        string                 `json:"usql_query"`
 			Entity       string                 `json:"search_entity"`
-			TargetSchema map[string]string      `json:"target_schema"`
+			TargetSchema map[string]interface{} `json:"target_schema"`
 			Data         map[string]interface{} `json:"data"`
 		}
 
@@ -1457,7 +1472,8 @@ func main() {
 								filteredData[key] = nil
 							}
 						}
-						finalPayload.Data = filteredData
+						// Local Go Function Registry Evaluation
+						finalPayload.Data = EvaluateUSQLFunctions(query.ReturnFields, filteredData)
 					} else {
 						finalPayload.Data = map[string]interface{}{
 							"raw_text_extracted": snippet,
@@ -1531,6 +1547,8 @@ func main() {
 	}
 
 	if *serveFlag {
+		_ = LoadSkillBookRegistry("ai_skills")
+		StartRegistryWatcher("ai_skills", 2*time.Second)
 		log.Printf("🚀 Starting UltraSearch API Server on :%s", *portFlag)
 		
 		opts := []chromedp.ExecAllocatorOption{

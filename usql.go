@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +33,8 @@ const (
 	TokRightBrace
 	TokGreater
 	TokSemicolon
+	TokLeftParen
+	TokRightParen
 )
 
 func (t TokenType) String() string {
@@ -71,6 +75,10 @@ func (t TokenType) String() string {
 		return ">"
 	case TokSemicolon:
 		return ";"
+	case TokLeftParen:
+		return "("
+	case TokRightParen:
+		return ")"
 	default:
 		return "UNKNOWN"
 	}
@@ -143,6 +151,10 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: TokGreater, Val: ">", Pos: start}
 	case ';':
 		return Token{Type: TokSemicolon, Val: ";", Pos: start}
+	case '(':
+		return Token{Type: TokLeftParen, Val: "(", Pos: start}
+	case ')':
+		return Token{Type: TokRightParen, Val: ")", Pos: start}
 	case '"', '\'':
 		// Read quoted string
 		quote := b
@@ -219,15 +231,31 @@ func (l *Lexer) NextToken() Token {
 
 // USQLQuery represents the Abstract Syntax Tree (AST) of a compiled USQL query
 type USQLQuery struct {
-	SearchEntity string            // e.g. "company:Databricks" or "Q* Reasoning"
-	Sources      []string          // e.g. ["crunchbase", "pitchbook"]
-	ReturnFields map[string]string // e.g. {"ceo": "string", "latest_valuation": "number"}
-	Confidence   float64           // e.g. 0.8
-	CacheTTL     time.Duration     // e.g. 24h
-	Format       string            // e.g. "json"
-	Language     string            // e.g. "en"
-	Country      string            // e.g. "us"
-	SafeSearch   string            // e.g. "off"
+	SearchEntity string                 // e.g. "company:Databricks" or "Q* Reasoning"
+	Sources      []string               // e.g. ["crunchbase", "pitchbook"]
+	ReturnFields map[string]interface{} // Field Name -> Type/Func/Nested Schema
+	Confidence   float64                // e.g. 0.8
+	CacheTTL     time.Duration          // e.g. 24h
+	Format       string                 // e.g. "json"
+	Language     string                 // e.g. "en"
+	Country      string                 // e.g. "us"
+	SafeSearch   string                 // e.g. "off"
+}
+
+// FuncExpr represents a parsed function call in the USQL query AST
+type FuncExpr struct {
+	Name string
+	Args []interface{} // Can be strings, numbers, identifiers, or other FuncExpr
+}
+
+// NestedSchema represents a nested JSON block e.g. { school: string }
+type NestedSchema struct {
+	Fields map[string]interface{}
+}
+
+// ArraySchema represents an array of primitive types or nested schemas
+type ArraySchema struct {
+	ValueType interface{} // Can be a string identifier ("string", "number") or NestedSchema
 }
 
 // USQLParser maps scanned tokens into a validated AST
@@ -258,10 +286,109 @@ func (p *USQLParser) expect(t TokenType) error {
 	return nil
 }
 
+func (p *USQLParser) parseValue() (interface{}, error) {
+	if p.match(TokLeftBrace) {
+		p.nextToken() // consume {
+		fields := make(map[string]interface{})
+		for !p.match(TokRightBrace) && !p.match(TokEOF) {
+			if !p.match(TokIdentifier) {
+				return nil, fmt.Errorf("position %d: expected identifier for schema field name, got %s ('%s')", p.curr.Pos, p.curr.Type, p.curr.Val)
+			}
+			fieldName := p.curr.Val
+			p.nextToken()
+
+			if err := p.expect(TokColon); err != nil {
+				return nil, err
+			}
+
+			val, err := p.parseValue()
+			if err != nil {
+				return nil, err
+			}
+			fields[fieldName] = val
+
+			if p.match(TokComma) {
+				p.nextToken()
+				continue
+			}
+			break
+		}
+		if err := p.expect(TokRightBrace); err != nil {
+			return nil, err
+		}
+		return NestedSchema{Fields: fields}, nil
+	}
+
+	if p.match(TokString) {
+		val := p.curr.Val
+		p.nextToken()
+		return val, nil
+	}
+
+	if p.match(TokNumber) {
+		val, err := strconv.ParseFloat(p.curr.Val, 64)
+		if err != nil {
+			valStr := p.curr.Val
+			p.nextToken()
+			return valStr, nil
+		}
+		p.nextToken()
+		return val, nil
+	}
+
+	if p.match(TokIdentifier) {
+		id := p.curr.Val
+		p.nextToken()
+
+		// If followed by '(', it's a function call OR array specification
+		if p.match(TokLeftParen) {
+			p.nextToken() // consume (
+
+			if strings.ToLower(id) == "array" {
+				arrVal, err := p.parseValue()
+				if err != nil {
+					return nil, err
+				}
+				if err := p.expect(TokRightParen); err != nil {
+					return nil, err
+				}
+				return ArraySchema{ValueType: arrVal}, nil
+			}
+
+			var args []interface{}
+			for !p.match(TokRightParen) && !p.match(TokEOF) {
+				argVal, err := p.parseValue()
+				if err != nil {
+					return nil, err
+				}
+				args = append(args, argVal)
+
+				if p.match(TokComma) {
+					p.nextToken()
+					continue
+				}
+				break
+			}
+			if err := p.expect(TokRightParen); err != nil {
+				return nil, err
+			}
+			return FuncExpr{Name: id, Args: args}, nil
+		}
+
+		if strings.ToLower(id) == "array" {
+			return ArraySchema{ValueType: "string"}, nil
+		}
+
+		return id, nil
+	}
+
+	return nil, fmt.Errorf("position %d: unexpected token '%s'", p.curr.Pos, p.curr.Val)
+}
+
 // Parse USQL statement
 func (p *USQLParser) Parse() (*USQLQuery, error) {
 	query := &USQLQuery{
-		ReturnFields: make(map[string]string),
+		ReturnFields: make(map[string]interface{}),
 		CacheTTL:     24 * time.Hour, // Default TTL
 		Format:       "json",         // Default format
 	}
@@ -329,13 +456,12 @@ func (p *USQLParser) Parse() (*USQLQuery, error) {
 				return nil, err
 			}
 
-			if !p.match(TokIdentifier) {
-				return nil, fmt.Errorf("position %d: expected type identifier (e.g. string, number, array)", p.curr.Pos)
+			val, err := p.parseValue()
+			if err != nil {
+				return nil, err
 			}
-			fieldType := p.curr.Val
-			p.nextToken()
 
-			query.ReturnFields[fieldName] = fieldType
+			query.ReturnFields[fieldName] = val
 
 			if p.match(TokComma) {
 				p.nextToken()
@@ -473,9 +599,30 @@ func parseUSQLDuration(val string) (time.Duration, error) {
 	}
 }
 
+func flattenFields(fields map[string]interface{}) []string {
+	var list []string
+	for k, v := range fields {
+		list = append(list, strings.ReplaceAll(k, "_", " "))
+		switch val := v.(type) {
+		case NestedSchema:
+			list = append(list, flattenFields(val.Fields)...)
+		case ArraySchema:
+			if subNS, ok := val.ValueType.(NestedSchema); ok {
+				list = append(list, flattenFields(subNS.Fields)...)
+			} else if subId, ok := val.ValueType.(string); ok {
+				list = append(list, subId)
+			} else if subFunc, ok := val.ValueType.(FuncExpr); ok {
+				list = append(list, subFunc.Name)
+			}
+		case FuncExpr:
+			list = append(list, val.Name)
+		}
+	}
+	return list
+}
+
 // CompileToDorkQuery translates the AST properties into highly efficient Google search dork templates
 func (q *USQLQuery) CompileToDorkQuery() string {
-	// Strip type modifiers e.g., company:Databricks -> Databricks
 	searchTarget := q.SearchEntity
 	if idx := strings.Index(searchTarget, ":"); idx >= 0 {
 		searchTarget = searchTarget[idx+1:]
@@ -484,9 +631,10 @@ func (q *USQLQuery) CompileToDorkQuery() string {
 	var builders []string
 	builders = append(builders, searchTarget)
 
-	// Inject target fields to guide SGE focus
-	for field := range q.ReturnFields {
-		builders = append(builders, strings.ReplaceAll(field, "_", " "))
+	// Flatten nested fields to guide SGE focus
+	flatFields := flattenFields(q.ReturnFields)
+	for _, field := range flatFields {
+		builders = append(builders, field)
 	}
 
 	// Bind target source dorks
@@ -515,16 +663,159 @@ func (q *USQLQuery) CompileToDorkQuery() string {
 	return strings.Join(builders, " ")
 }
 
+// USQLFunction defines the signature for local Go standard functions
+type USQLFunction func(args []interface{}) (interface{}, error)
+
+// GlobalFunctionRegistry maps standard enterprise keywords to Go handlers
+var GlobalFunctionRegistry = map[string]USQLFunction{
+	"UPPER": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return "", nil
+		}
+		return strings.ToUpper(fmt.Sprintf("%v", args[0])), nil
+	},
+	"LOWER": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return "", nil
+		}
+		return strings.ToLower(fmt.Sprintf("%v", args[0])), nil
+	},
+	"TITLE": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return "", nil
+		}
+		return strings.Title(fmt.Sprintf("%v", args[0])), nil
+	},
+	"TRIM": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return "", nil
+		}
+		return strings.TrimSpace(fmt.Sprintf("%v", args[0])), nil
+	},
+	"CLEAN_PII": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return "", nil
+		}
+		val := fmt.Sprintf("%v", args[0])
+		emailRegex := regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+		val = emailRegex.ReplaceAllString(val, "[EMAIL_REDACTED]")
+		phoneRegex := regexp.MustCompile(`\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}`)
+		val = phoneRegex.ReplaceAllString(val, "[PHONE_REDACTED]")
+		return val, nil
+	},
+	"CONVERT_CURRENCY": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return 0.0, nil
+		}
+		valStr := fmt.Sprintf("%v", args[0])
+		num, err := strconv.ParseFloat(valStr, 64)
+		if err != nil {
+			return valStr, nil
+		}
+		target := "USD"
+		if len(args) > 1 {
+			target = strings.ToUpper(fmt.Sprintf("%v", args[1]))
+		}
+		switch target {
+		case "EUR":
+			return num * 0.92, nil
+		case "GBP":
+			return num * 0.79, nil
+		default:
+			return num, nil
+		}
+	},
+	"ESTIMATE_ARR": func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			return 0.0, nil
+		}
+		valStr := fmt.Sprintf("%v", args[0])
+		num, err := strconv.ParseFloat(valStr, 64)
+		if err == nil {
+			return num * 4.0, nil // Annualized ARR
+		}
+		return valStr + " (Annualized Estimate)", nil
+	},
+}
+
+// EvaluateUSQLFunctions maps and processes standard library calls on parsed SGE search responses
+func EvaluateUSQLFunctions(schema map[string]interface{}, data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, schemaVal := range schema {
+		dataVal, exists := data[k]
+		if !exists {
+			continue
+		}
+		result[k] = evaluateSingleField(schemaVal, dataVal)
+	}
+	return result
+}
+
+func evaluateSingleField(schemaVal interface{}, dataVal interface{}) interface{} {
+	switch s := schemaVal.(type) {
+	case FuncExpr:
+		var resolvedArgs []interface{}
+		for _, arg := range s.Args {
+			if strArg, ok := arg.(string); ok && (strArg == "string" || strArg == "number") {
+				resolvedArgs = append(resolvedArgs, dataVal)
+			} else if subFunc, ok := arg.(FuncExpr); ok {
+				resolvedArgs = append(resolvedArgs, evaluateSingleField(subFunc, dataVal))
+			} else {
+				resolvedArgs = append(resolvedArgs, arg)
+			}
+		}
+
+		fn, ok := GlobalFunctionRegistry[strings.ToUpper(s.Name)]
+		if ok {
+			res, err := fn(resolvedArgs)
+			if err == nil {
+				return res
+			}
+		}
+		// Cognitive AI Fallback: SGE handles dynamic unverified community functions
+		if len(resolvedArgs) > 0 {
+			return resolvedArgs[0]
+		}
+		return dataVal
+
+	case NestedSchema:
+		if m, ok := dataVal.(map[string]interface{}); ok {
+			nestedRes := make(map[string]interface{})
+			for subK, subSchema := range s.Fields {
+				if subData, ok := m[subK]; ok {
+					nestedRes[subK] = evaluateSingleField(subSchema, subData)
+				}
+			}
+			return nestedRes
+		}
+		return dataVal
+
+	case ArraySchema:
+		if arr, ok := dataVal.([]interface{}); ok {
+			var nestedArr []interface{}
+			for _, item := range arr {
+				nestedArr = append(nestedArr, evaluateSingleField(s.ValueType, item))
+			}
+			return nestedArr
+		}
+		return dataVal
+	}
+	return dataVal
+}
+
 // RunUSQLDiagnostics parses and compiles mock queries to verify tokenizing and AST mapping
 func RunUSQLDiagnostics() {
 	fmt.Println("\n[*] Running USQL Language Compiler Diagnostics...")
 
-	queryStr := `SEARCH company:"Databricks"
+	queryStr := `SEARCH company:"TLC Capital"
 FROM crunchbase, pitchbook
 RETURN {
-  funding_rounds: array,
-  latest_valuation: number,
-  ceo: string
+  personnel: array({
+    name: UPPER(string),
+    title: string,
+    education: { school: string }
+  }),
+  estimated_arr: ESTIMATE_ARR(number)
 }
 WITH confidence > 0.8, language:en, country:us, safe:off
 CACHE ttl:24h
@@ -551,4 +842,22 @@ FORMAT json;`
 
 	compiledDork := ast.CompileToDorkQuery()
 	fmt.Printf("\nGenerated Google Dork Template:\n%s\n", compiledDork)
+
+	// Mock SGE output validation
+	mockSGEData := map[string]interface{}{
+		"personnel": []interface{}{
+			map[string]interface{}{
+				"name":  "glen lindenstaedt",
+				"title": "Managing Director",
+				"education": map[string]interface{}{
+					"school": "Stanford University",
+				},
+			},
+		},
+		"estimated_arr": "2500000",
+	}
+	fmt.Printf("\nMocking SGE Raw Output:\n%+v\n", mockSGEData)
+	evaluated := EvaluateUSQLFunctions(ast.ReturnFields, mockSGEData)
+	evaluatedJSON, _ := json.MarshalIndent(evaluated, "", "  ")
+	fmt.Printf("\nAfter Global Function Registry local evaluation:\n%s\n", string(evaluatedJSON))
 }

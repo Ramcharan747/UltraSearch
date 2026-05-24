@@ -202,7 +202,18 @@ When running in server mode (`./ultrasearch -serve -port 8082`), the server expo
 
 ---
 
-## 🤝 Contributing & License
+## 🤝 Contributing, Sandboxing & License
 
-Contributions are welcome! Please open a Pull Request or issue to discuss schema additions, Go backend refactorings, or new Skill Books.
+Contributions are welcome! Please read our [AI Developer & Senior Systems Handbook](file:///Users/ramcharan/Desktop/UltraSearch/AI_DEVELOPER_HANDBOOK.md) to understand the directory responsibilities, dynamic package watch routines, and local function registry architecture.
+
+### Safe Package Installation:
+To install community templates and Skill Books securely from public repositories, run:
+```bash
+./ultrasearch -install <github-url>
+```
+All dynamic downloads are initially sandboxed inside `ai_skills/unverified/` and subjected to dual-vector injection audits. Once safe, they can be promoted to the active catalog with:
+```bash
+./ultrasearch -promote-skill <filename.md>
+```
+
 Distributed under the MIT License. See `LICENSE` for details.
