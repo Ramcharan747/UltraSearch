@@ -225,6 +225,9 @@ type USQLQuery struct {
 	Confidence   float64           // e.g. 0.8
 	CacheTTL     time.Duration     // e.g. 24h
 	Format       string            // e.g. "json"
+	Language     string            // e.g. "en"
+	Country      string            // e.g. "us"
+	SafeSearch   string            // e.g. "off"
 }
 
 // USQLParser maps scanned tokens into a validated AST
@@ -349,22 +352,52 @@ func (p *USQLParser) Parse() (*USQLQuery, error) {
 	// 4. Parse WITH (optional)
 	if p.match(TokWith) {
 		p.nextToken() // consume WITH
-		if p.match(TokIdentifier) && strings.ToLower(p.curr.Val) == "confidence" {
-			p.nextToken() // consume confidence
-			if err := p.expect(TokGreater); err != nil {
-				return nil, err
+		for {
+			if p.match(TokIdentifier) {
+				paramName := strings.ToLower(p.curr.Val)
+				p.nextToken()
+
+				if paramName == "confidence" {
+					if err := p.expect(TokGreater); err != nil {
+						return nil, err
+					}
+					if !p.match(TokNumber) {
+						return nil, fmt.Errorf("position %d: expected numeric threshold after confidence >", p.curr.Pos)
+					}
+					val, err := strconv.ParseFloat(p.curr.Val, 64)
+					if err != nil {
+						return nil, fmt.Errorf("position %d: invalid float number: %v", p.curr.Pos, err)
+					}
+					query.Confidence = val
+					p.nextToken()
+				} else {
+					if err := p.expect(TokColon); err != nil {
+						return nil, err
+					}
+					if !p.match(TokIdentifier) && !p.match(TokString) {
+						return nil, fmt.Errorf("position %d: expected parameter value in WITH statement", p.curr.Pos)
+					}
+					paramVal := p.curr.Val
+					p.nextToken()
+
+					switch paramName {
+					case "language":
+						query.Language = paramVal
+					case "country":
+						query.Country = paramVal
+					case "safe_search", "safe":
+						query.SafeSearch = paramVal
+					}
+				}
+			} else {
+				return nil, fmt.Errorf("position %d: expected parameter identifier in WITH block", p.curr.Pos)
 			}
-			if !p.match(TokNumber) {
-				return nil, fmt.Errorf("position %d: expected numeric threshold after confidence >", p.curr.Pos)
+
+			if p.match(TokComma) {
+				p.nextToken() // consume ,
+				continue
 			}
-			val, err := strconv.ParseFloat(p.curr.Val, 64)
-			if err != nil {
-				return nil, fmt.Errorf("position %d: invalid float number: %v", p.curr.Pos, err)
-			}
-			query.Confidence = val
-			p.nextToken()
-		} else {
-			return nil, fmt.Errorf("position %d: expected 'confidence' parameter in WITH statement", p.curr.Pos)
+			break
 		}
 	}
 
@@ -493,7 +526,7 @@ RETURN {
   latest_valuation: number,
   ceo: string
 }
-WITH confidence > 0.8
+WITH confidence > 0.8, language:en, country:us, safe:off
 CACHE ttl:24h
 FORMAT json;`
 
@@ -510,6 +543,9 @@ FORMAT json;`
 	fmt.Printf("Sources Chosen:  %v\n", ast.Sources)
 	fmt.Printf("Return Schema:   %+v\n", ast.ReturnFields)
 	fmt.Printf("Confidence:      %v\n", ast.Confidence)
+	fmt.Printf("Language filter: %s\n", ast.Language)
+	fmt.Printf("Country filter:  %s\n", ast.Country)
+	fmt.Printf("SafeSearch flag: %s\n", ast.SafeSearch)
 	fmt.Printf("Cache TTL:       %v\n", ast.CacheTTL)
 	fmt.Printf("Format Output:   %s\n", ast.Format)
 
