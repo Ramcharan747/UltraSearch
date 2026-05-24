@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1300,10 +1301,176 @@ func main() {
 	saveProfileFlag := flag.String("save-profile", "", "Save the resolved filters under this profile name")
 	listProfilesFlag := flag.Bool("list-profiles", false, "List all saved profiles and exit")
 	
+	usqlFlag := flag.String("usql", "", "Execute a structured USQL statement")
+	semanticRouteFlag := flag.String("semantic-route", "", "Resolve a query to matching Skill Books")
+	integrateSkillFlag := flag.String("integrate-skill", "", "Integrate a community Skill Book template (Sandbox intake)")
+	promoteSkillFlag := flag.String("promote-skill", "", "Promote a staged Skill Book to the active engine (Human-in-the-loop verification)")
+	listStagedFlag := flag.Bool("list-staged", false, "List all staged Skill Books awaiting human promotion")
+	
 	flag.Parse()
 
 	if *vortexDiagFlag {
 		RunVortexDiagnostics()
+		RunUSQLDiagnostics()
+		RunRegistryDiagnostics()
+		RunContributionDiagnostics()
+		return
+	}
+
+	if *integrateSkillFlag != "" {
+		cg := NewContributionGateway("ai_skills", filepath.Join("ai_skills", "unverified"))
+		status, err := cg.IntakeSkillBook(*integrateSkillFlag)
+		if err != nil {
+			log.Fatalf("❌ Intake failed: %v", err)
+		}
+		fmt.Printf("🎉 Staged cleanly! Contribution status: %s. Staged in ai_skills/unverified/ awaiting human review.\n", status)
+		return
+	}
+
+	if *promoteSkillFlag != "" {
+		cg := NewContributionGateway("ai_skills", filepath.Join("ai_skills", "unverified"))
+		err := cg.PromoteSkillBook(*promoteSkillFlag)
+		if err != nil {
+			log.Fatalf("❌ Promotion failed: %v", err)
+		}
+		fmt.Println("🎉 Human review verified successfully. Skill Book promoted to Active catalog!")
+		return
+	}
+
+	if *listStagedFlag {
+		cg := NewContributionGateway("ai_skills", filepath.Join("ai_skills", "unverified"))
+		list, err := cg.ListStagedSkillBooks()
+		if err != nil {
+			log.Fatalf("❌ Failed to list staged Skill Books: %v", err)
+		}
+		fmt.Println("📬 Staged Skill Books awaiting human review:")
+		for _, f := range list {
+			fmt.Printf("  - %s\n", f)
+		}
+		return
+	}
+
+	if *semanticRouteFlag != "" {
+		_ = LoadSkillBookRegistry("ai_skills")
+		book, score, found := SemanticRouteQuery(*semanticRouteFlag)
+		if found {
+			fmt.Printf("🎯 Best-fit Skill Book: %s (Cosine Correlation: %.4f)\n", book.Name, score)
+			fmt.Printf("   Author:             %s\n", book.Author)
+			fmt.Printf("   Version:            %s\n", book.Version)
+			fmt.Printf("   Active Domains:     %v\n", book.Domains)
+		} else {
+			fmt.Printf("⚠️ No matching Skill Book found. Highest correlation: %.4f (below threshold 0.15)\n", score)
+		}
+		return
+	}
+
+	if *usqlFlag != "" {
+		parser := NewUSQLParser(*usqlFlag)
+		query, err := parser.Parse()
+		if err != nil {
+			log.Fatalf("❌ USQL Syntax Error: %v", err)
+		}
+
+		// Initialize global registry and attempt semantic routing if FROM is missing in query
+		if len(query.Sources) == 0 {
+			_ = LoadSkillBookRegistry("ai_skills")
+			if book, _, found := SemanticRouteQuery(query.SearchEntity); found {
+				log.Printf("🎯 [USQL Engine] Auto-routed query to Skill Book: %s", book.Name)
+				// Bind Skill Book sources dynamically
+				query.Sources = book.Domains
+			}
+		}
+
+		dorkQuery := query.CompileToDorkQuery()
+		log.Printf("🤖 [USQL Compiler] AST compiled into search dork: %q", dorkQuery)
+
+		// Resolve search filters
+		resolvedFilters, found := filterManager.Get(*profileNameFlag)
+		if !found {
+			resolvedFilters = SearchFilters{
+				Language:   "browser",
+				Country:    "browser",
+				Uule:       "browser",
+				SafeSearch: "browser",
+				Tbs:        "browser",
+			}
+		}
+		if *hlFlag != "" {
+			resolvedFilters.Language = *hlFlag
+		}
+		if *glFlag != "" {
+			resolvedFilters.Country = *glFlag
+		}
+		if *uuleFlag != "" {
+			resolvedFilters.Uule = *uuleFlag
+		}
+		if *safeFlag != "" {
+			resolvedFilters.SafeSearch = *safeFlag
+		}
+		if *tbsFlag != "" {
+			resolvedFilters.Tbs = *tbsFlag
+		}
+
+		ctx := GetGlobalBrowserCtx()
+		// Call Go parallel search executor
+		results := runSearchPipeline(ctx, []string{dorkQuery}, *limitFlag, *workersFlag, *contentFlag, "only", *showBrowserFlag, *headlessFlag, resolvedFilters)
+
+		// Format output JSON matching the RETURN block schema properties
+		log.Printf("📊 [USQL Engine] Scraped %d raw search answers. Compiling schemas...", len(results))
+
+		type USQLResponse struct {
+			Query        string                 `json:"usql_query"`
+			Entity       string                 `json:"search_entity"`
+			TargetSchema map[string]string      `json:"target_schema"`
+			Data         map[string]interface{} `json:"data"`
+		}
+
+		var finalPayload USQLResponse
+		finalPayload.Query = *usqlFlag
+		finalPayload.Entity = query.SearchEntity
+		finalPayload.TargetSchema = query.ReturnFields
+
+		// Extract raw SGE JSON response if present
+		for _, r := range results {
+			for _, resItem := range r.Results {
+				if resItem.Rank == 0 {
+					var rawMap map[string]interface{}
+					snippet := resItem.Snippet
+					jsonStart := strings.Index(snippet, "{")
+					jsonEnd := strings.LastIndex(snippet, "}") + 1
+					if jsonStart != -1 && jsonEnd > jsonStart {
+						_ = json.Unmarshal([]byte(snippet[jsonStart:jsonEnd]), &rawMap)
+					}
+
+					if rawMap != nil {
+						filteredData := make(map[string]interface{})
+						for key := range query.ReturnFields {
+							foundVal := false
+							for k, v := range rawMap {
+								if strings.EqualFold(k, key) {
+									filteredData[key] = v
+									foundVal = true
+									break
+								}
+							}
+							if !foundVal {
+								filteredData[key] = nil
+							}
+						}
+						finalPayload.Data = filteredData
+					} else {
+						finalPayload.Data = map[string]interface{}{
+							"raw_text_extracted": snippet,
+						}
+					}
+				}
+			}
+		}
+
+		outBytes, _ := json.MarshalIndent(finalPayload, "", "  ")
+		fmt.Println("\n=== USQL QUERY RESULT ===")
+		fmt.Println(string(outBytes))
+		fmt.Println("=========================")
 		return
 	}
 

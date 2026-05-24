@@ -1,59 +1,77 @@
-# Implementation Plan: Native Go Vortex Security & Telemetry Migration
+# Implementation Plan: USQL Language Engine & WI-OS Semantic Kernel
 
-This plan details the migration of the UltraSearch Security Gateway (Immunizer) and Telemetry Client from Python to native Go. It also implements the high-fidelity, unstripped telemetry data policy when explicit user consent is provided, ensuring zero third-party exposure and strict security controls.
+This plan details the design and native Go implementation of the **UltraSearch Query Language (USQL)** compiler and the **Web-Intelligence Operating System (WI-OS) Kernel**. It establishes a dynamic, zero-trust registry that resolves query templates at scale using a semantic router, and introduces a safe AI-Human validation pipeline for community-contributed templates.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Complete Python Removal:** By migrating the Vortex modules to native Go, we eliminate Python as a runtime dependency for the main UltraSearch engine, maximizing execution speed and simplifying deployment down to a single binary.
+> **No Executable Code in Contributions:** To prevent malicious or careless community modifications, all user/community templates are strictly restricted to **declarative markdown Skill Books**. There is absolute separation: users define schemas and search drivers in markdown, and our Go core OS compiles and executes them. No arbitrary code execution is mathematically possible.
 > 
-> **Opt-In Raw Telemetry (No Data Stripping):** When a user grants explicit consent (`"telemetry_consent": "opt_in_raw"`), UltraSearch will bypass all client-side data stripping (such as anonymization or PII filtering). The raw user search query, generative SGE responses, exact content strings, and cited URLs will be transmitted 100% intact. This is critical to building a high-fidelity dataset for ML search optimization.
+> **AI-Human Validation Pipeline:** All newly contributed Skill Books must pass through a two-stage check:
+> 1. *AI Sandbox Audit:* Checks dorks and schemas against known cyber threat vectors (creds mining, payload exfiltration, Pastebin breaches).
+> 2. *Human-in-the-Loop Approval:* Staged in an `unverified/` buffer, requiring manual human verification before being loaded into the active OS kernel registry.
 > 
-> **Zero-Sharing Privacy Commitment:** All transmitted telemetry is forwarded exclusively over modern, secure TLS 1.2/1.3 contexts to a private database inside a secure VPC, solely used for improving search accuracy and optimizing system performance. No data will ever be shared with third parties.
+> **Semantic Router (Auto-Selection at Scale):** Bypasses the tedious manual file navigation. The WI-OS kernel uses our pure Go TF-IDF similarity engine to map incoming natural language search queries directly to the best-fit Skill Book dynamically, resolving schemas and dorking rules in $O(1)$ lookup time.
 
 ---
 
-## Strategic Stack Architecture: Who, Where, and Why?
+## Proposed Subsystems Architecture
 
-To scale UltraSearch into a robust platform integrated across CLI, spreadsheets, extensions, and the cloud, we partition our engineering stacks based on the unique strengths of each technology:
+We will implement three Go-native files in the root of the repository:
+1. **`usql.go` (The USQL Compiler & AST Engine):**
+   - **Lexer/Scanner:** Tokenizes inputs into typed tokens: `SEARCH`, `FROM`, `RETURN`, `WITH`, `CACHE`, `FORMAT`, keys, strings, and types.
+   - **Parser:** Validates syntax and generates an Abstract Syntax Tree (AST).
+   - **Execution Engine:** Evaluates AST properties and binds them to our Go Scraping backend loops.
+2. **`registry.go` (WI-OS Dynamic Skill Book Registry & Semantic Router):**
+   - **Frontmatter Parser:** Parses Skill Book markdown frontmatter (`name`, `version`, `domains`, `trust_tier`).
+   - **Semantic Router:** Employs our pure Go `CosineSimilarity` engine to match user query terms against Skill Book `domains` and metadata to auto-select schemas at scale.
+3. **`contribution.go` (AI-Human Validation Pipeline):**
+   - **Intake Gateway:** Command-line hook (`./ultrasearch -integrate-skill <path>`) that parses new books.
+   - **Dry-run Security Check:** Evaluates dork templates against injection and cyber-attack rules.
+   - **Verification Buffer:** Saves unverified books to `/ai_skills/unverified/` until explicitly promoted.
 
-| Technology / Language | Where It is Used | Why This Choice? |
-| :--- | :--- | :--- |
-| **Go** | Backend Core Daemon (`main.go`, `vortex.go`, `http_search.go`) | **Concurrency & Simplicity:** Goroutines allow executing hundreds of parallel dorks, scrapes, and probes with minimal memory overhead. Warmed connection pools and headless Chrome CDP control via `chromedp` execute at edge speed. It compiles into a single, dependency-free binary for easy multi-platform deployment. |
-| **Rust** | OS-Hook Input Capture Daemon (`cursor_capture/src/`) | **Deterministic Microsecond Precision:** Rust allows manual memory control with zero Garbage Collection (GC) pauses. This guarantees the input hook captures HID coordinates at true sub-millisecond precision without losing mouse events. |
-| **JavaScript / TypeScript** | Chrome/Firefox Extensions, Excel/Sheets Add-ins, VS Code/Cursor Plugins | **Native Integration:** JS/TS is the native language of browser environments, Microsoft Office Add-in host contexts, and developer editor APIs. It acts as a lightweight "spoke" wrapper that communicates with the local Go core. |
-| **SQL (ClickHouse)** | Telemetry Storage Vault & Analytics | **High-Throughput Analytics:** Columnar databases compress raw search vectors, queries, and SGE telemetry logs by up to 10x, enabling sub-millisecond aggregations over billions of data rows. |
+---
+
+## Technical Specifications
+
+### 1. Abstract Syntax Tree (AST) Structure in Go
+```go
+type USQLQuery struct {
+    SearchEntity string                 // e.g. "company:Databricks"
+    Sources      []string               // e.g. ["crunchbase", "pitchbook"]
+    ReturnFields map[string]string      // e.g. {"ceo": "string", "latest_valuation": "number"}
+    Confidence   float64                // e.g. 0.8
+    CacheTTL     time.Duration          // e.g. 24h
+    Format       string                 // e.g. "json"
+}
+```
+
+### 2. Lexical Grammar
+- **Keywords:** `SEARCH`, `FROM`, `RETURN`, `WITH`, `CACHE`, `FORMAT`
+- **Symbols:** `:`, `,`, `{`, `}`, `>`, `;`
+- **Values:** Identifiers, quoted strings (`"Databricks"`), numbers, durations (`24h`)
 
 ---
 
 ## Proposed Changes
 
-We will delete the legacy Python scripts under `scripts/vortex` and create a native Go sub-package `vortex` (or incorporate it directly into the Go module) to manage security validation and telemetry log shipping.
+### [NEW] [usql.go](file:///Users/ramcharan/Desktop/UltraSearch/usql.go)
+Contains the lexical scanner, parser, AST generation, and execution compiler that binds USQL queries directly to the Go search engine.
 
-### [DELETE] [immunizer.py](file:///Users/ramcharan/Desktop/UltraSearch/scripts/vortex/immunizer.py)
-### [DELETE] [telemetry.py](file:///Users/ramcharan/Desktop/UltraSearch/scripts/vortex/telemetry.py)
+### [NEW] [registry.go](file:///Users/ramcharan/Desktop/UltraSearch/registry.go)
+Manages Skill Book cataloging, live in-memory registry, frontmatter parsing, and the dynamic TF-IDF semantic query router.
 
-### [NEW] [vortex.go](file:///Users/ramcharan/Desktop/UltraSearch/vortex.go)
-We will implement a clean, lightweight Go package file:
-1. **Ingestion Sandbox:** Strips script/HTML tags and null bytes.
-2. **Dynamic Domain Reputation Audit:** Computes average domain trust. High-trust domains bypass heavy scans, minimizing execution latency.
-3. **TF-IDF Cosine Similarity Vector Engine:** Pure Go implementation of vector correlation to compute cohesion and anomaly scores.
-4. **Secondary AI/Rule-based Verification Gateway:** Flags adversarial prompts/injections.
-5. **Secure Telemetry Client:**
-   - Reads `telemetry_config.json`.
-   - If `consent == "opt_in_raw"`, packages the raw `usql_query`, `raw_sge_response`, and associated cited URLs **with absolutely zero data stripping**.
-   - Dispatches a secure HTTPS POST to the cloud endpoint using a strict `crypto/tls` config enforcing TLS 1.2/1.3.
+### [NEW] [contribution.go](file:///Users/ramcharan/Desktop/UltraSearch/contribution.go)
+Implements the secure AI-Human validation pipeline, dry-run safety auditor, and human promotion staging endpoints.
 
 ### [MODIFY] [main.go](file:///Users/ramcharan/Desktop/UltraSearch/main.go)
-Integrate the native `vortex` processing immediately after SGE responses are retrieved or scraped.
+Integrate the USQL CLI and server interface so developers can run raw USQL queries or trigger skill integrations directly from the terminal.
 
 ---
 
 ## Verification Plan
 
-### Automated Tests
-- Run unit test blocks inside `vortex.go` to verify:
-  1. Cosine similarity calculation matches Python-level TF-IDF results.
-  2. Consent parsing logic correctly switches between silent ignore (`opt_out`) and unstripped transmission (`opt_in_raw`).
-  3. Sanitization correctly strips `<script>` blocks but retains fully intact raw payloads when opt-in is enabled.
-- Verify the Go compilation: `go build -o ultrasearch` compiles cleanly with no errors.
+### Automated Compiler Tests
+- Compile and scan complex USQL statements and verify that the AST maps precisely.
+- Place a mock Skill Book in `/ai_skills/unverified/` and run the contribution intake script, validating that the dry-run audits flag toxic patterns (e.g. trying to search `pastebin.com/raw` for `db_password`).
+- Query the Semantic Router with natural terms like "acquisitions", "funding", "ceos", and verify that it correctly maps to `pe_deal_intelligence` with high similarity scores.
