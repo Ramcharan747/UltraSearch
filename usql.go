@@ -861,3 +861,122 @@ FORMAT json;`
 	evaluatedJSON, _ := json.MarshalIndent(evaluated, "", "  ")
 	fmt.Printf("\nAfter Global Function Registry local evaluation:\n%s\n", string(evaluatedJSON))
 }
+
+// ParseHybridQuery checks if the query is a formal USQL statement. If not, it parses the query semantically.
+func ParseHybridQuery(input string) (*USQLQuery, error) {
+	trimmed := strings.TrimSpace(input)
+	if len(trimmed) >= 6 && strings.EqualFold(trimmed[:6], "SEARCH") {
+		parser := NewUSQLParser(trimmed)
+		return parser.Parse()
+	}
+
+	q := &USQLQuery{
+		ReturnFields: make(map[string]interface{}),
+		CacheTTL:     24 * time.Hour,
+		Format:       "json",
+	}
+
+	// 1. Semantic router mapping: check if query has high similarity to a staged Skill Book
+	if len(GlobalRegistry) > 0 {
+		if book, _, found := SemanticRouteQuery(trimmed); found {
+			q.Sources = book.Domains
+		}
+	}
+
+	// 2. Identify the target entity
+	q.SearchEntity = extractTargetEntity(trimmed)
+
+	// 3. Extract requested fields using keyword matching
+	lowerInput := strings.ToLower(trimmed)
+	fieldKeywords := map[string][]string{
+		"ceo":              {"ceo", "chief executive", "leader"},
+		"founder":          {"founder", "co-founder", "started by"},
+		"valuation":        {"valuation", "worth", "market cap"},
+		"funding":          {"funding", "raised", "capital", "series"},
+		"revenue":          {"revenue", "arr", "annual recurring", "sales"},
+		"key_personnel":    {"executives", "team", "personnel", "directors", "board"},
+		"arxiv_id":         {"arxiv", "paper id", "identifier"},
+		"abstract_summary": {"abstract", "summary", "tldr"},
+		"authors":          {"authors", "written by", "investigators"},
+	}
+
+	for field, keywords := range fieldKeywords {
+		for _, kw := range keywords {
+			if strings.Contains(lowerInput, kw) {
+				if field == "name" || field == "ceo" || field == "founder" {
+					q.ReturnFields[field] = FuncExpr{Name: "UPPER", Args: []interface{}{"string"}}
+				} else {
+					q.ReturnFields[field] = "string"
+				}
+				break
+			}
+		}
+	}
+
+	if len(q.ReturnFields) == 0 {
+		q.ReturnFields["summary"] = "string"
+		q.ReturnFields["key_details"] = "string"
+	}
+
+	if q.SearchEntity == "" {
+		q.SearchEntity = trimmed
+	}
+
+	return q, nil
+}
+
+func extractTargetEntity(input string) string {
+	lower := strings.ToLower(input)
+	words := strings.Fields(input)
+	
+	if idx := strings.Index(lower, "company:"); idx != -1 {
+		rest := input[idx+8:]
+		fields := strings.Fields(rest)
+		if len(fields) > 0 {
+			return strings.Trim(fields[0], `"'.,`)
+		}
+	}
+
+	patterns := []string{"ceo of ", "founder of ", "valuation of ", "funding for ", "funding of ", "about ", "investors in "}
+	for _, p := range patterns {
+		if idx := strings.Index(lower, p); idx != -1 {
+			target := input[idx+len(p):]
+			targetWords := strings.Fields(target)
+			if len(targetWords) > 0 {
+				var entityParts []string
+				for _, w := range targetWords {
+					wLower := strings.ToLower(w)
+					if wLower == "and" || wLower == "with" || wLower == "on" || wLower == "at" || wLower == "in" || wLower == "from" {
+						break
+					}
+					entityParts = append(entityParts, strings.Trim(w, `"'.,`))
+					if len(entityParts) >= 2 {
+						break
+					}
+				}
+				return strings.Join(entityParts, " ")
+			}
+		}
+	}
+
+	var properNouns []string
+	for i, w := range words {
+		if i == 0 {
+			continue
+		}
+		if len(w) > 0 && unicode.IsUpper(rune(w[0])) {
+			properNouns = append(properNouns, strings.Trim(w, `"'.,`))
+			if len(properNouns) >= 2 {
+				break
+			}
+		}
+	}
+	if len(properNouns) > 0 {
+		return strings.Join(properNouns, " ")
+	}
+
+	if len(words) > 0 {
+		return words[len(words)-1]
+	}
+	return input
+}

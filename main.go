@@ -806,7 +806,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 					_, verdict := globalImmunizer.ProcessSGEResponse(q, r.Snippet, sgeSources, int(time.Since(startTime).Milliseconds()))
 					log.Printf("🛡️ [Vortex] Sanitization complete. Verdict: %s", verdict)
 					
-					if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" {
+					if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" && verdict != "NO_JSON_FOUND" && verdict != "PARSING_ERROR" {
 						res[i].Snippet = fmt.Sprintf("⚠️ [Vortex Security Alert] Indirect Prompt Injection Attack Neutralized.\nVerdict: %s", verdict)
 					}
 				}
@@ -1380,10 +1380,10 @@ func main() {
 	}
 
 	if *usqlFlag != "" {
-		parser := NewUSQLParser(*usqlFlag)
-		query, err := parser.Parse()
+		query, err := ParseHybridQuery(*usqlFlag)
 		if err != nil {
-			log.Fatalf("❌ USQL Syntax Error: %v", err)
+			LogQueryFailure(*usqlFlag, "", "HYBRID_PARSE_ERROR", err.Error(), SearchFilters{})
+			log.Fatalf("❌ Hybrid Parse Error: %v", err)
 		}
 
 		// Initialize global registry and attempt semantic routing if FROM is missing in query
@@ -1427,10 +1427,8 @@ func main() {
 		}
 
 		ctx := GetGlobalBrowserCtx()
-		// Call Go parallel search executor
 		results := runSearchPipeline(ctx, []string{dorkQuery}, *limitFlag, *workersFlag, *contentFlag, "only", *showBrowserFlag, *headlessFlag, resolvedFilters)
 
-		// Format output JSON matching the RETURN block schema properties
 		log.Printf("📊 [USQL Engine] Scraped %d raw search answers. Compiling schemas...", len(results))
 
 		type USQLResponse struct {
@@ -1438,6 +1436,7 @@ func main() {
 			Entity       string                 `json:"search_entity"`
 			TargetSchema map[string]interface{} `json:"target_schema"`
 			Data         map[string]interface{} `json:"data"`
+			Error        string                 `json:"error,omitempty"`
 		}
 
 		var finalPayload USQLResponse
@@ -1445,12 +1444,27 @@ func main() {
 		finalPayload.Entity = query.SearchEntity
 		finalPayload.TargetSchema = query.ReturnFields
 
-		// Extract raw SGE JSON response if present
+		foundData := false
+
 		for _, r := range results {
 			for _, resItem := range r.Results {
 				if resItem.Rank == 0 {
 					var rawMap map[string]interface{}
 					snippet := resItem.Snippet
+					
+					// Scan snippet for refusal templates
+					lowerSnippet := strings.ToLower(snippet)
+					if strings.Contains(lowerSnippet, "not available for this search") ||
+						strings.Contains(lowerSnippet, "can't generate") ||
+						strings.Contains(lowerSnippet, "try again later") ||
+						strings.Contains(lowerSnippet, "i cannot fulfill") ||
+						strings.Contains(lowerSnippet, "i cannot provide") {
+						LogQueryFailure(*usqlFlag, dorkQuery, "SGE_REFUSAL", snippet, resolvedFilters)
+						finalPayload.Error = "Google AI Overview refused to generate: " + snippet
+						foundData = true
+						break
+					}
+
 					jsonStart := strings.Index(snippet, "{")
 					jsonEnd := strings.LastIndex(snippet, "}") + 1
 					if jsonStart != -1 && jsonEnd > jsonStart {
@@ -1472,15 +1486,23 @@ func main() {
 								filteredData[key] = nil
 							}
 						}
-						// Local Go Function Registry Evaluation
 						finalPayload.Data = EvaluateUSQLFunctions(query.ReturnFields, filteredData)
+						foundData = true
 					} else {
+						// Log failure to find structured JSON (even if some text is there)
+						LogQueryFailure(*usqlFlag, dorkQuery, "SGE_SCHEMALESS_RESPONSE", snippet, resolvedFilters)
 						finalPayload.Data = map[string]interface{}{
 							"raw_text_extracted": snippet,
 						}
+						foundData = true
 					}
 				}
 			}
+		}
+
+		if !foundData {
+			LogQueryFailure(*usqlFlag, dorkQuery, "NO_SEARCH_RESULTS", "Zero search responses returned from browser context", resolvedFilters)
+			finalPayload.Error = "no structured SGE overview resolved"
 		}
 
 		outBytes, _ := json.MarshalIndent(finalPayload, "", "  ")
@@ -1744,12 +1766,12 @@ func main() {
 				return
 			}
 
-			parser := NewUSQLParser(queryStr)
-			query, err := parser.Parse()
+			query, err := ParseHybridQuery(queryStr)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]string{"error": "USQL Parse Error: " + err.Error()})
+				LogQueryFailure(queryStr, "", "HYBRID_PARSE_ERROR", err.Error(), SearchFilters{})
+				json.NewEncoder(w).Encode(map[string]string{"error": "USQL Hybrid Parse Error: " + err.Error()})
 				return
 			}
 
@@ -1798,6 +1820,20 @@ func main() {
 					if resItem.Rank == 0 {
 						var rawMap map[string]interface{}
 						snippet := resItem.Snippet
+
+						// Scan for SGE Refusals
+						lowerSnippet := strings.ToLower(snippet)
+						if strings.Contains(lowerSnippet, "not available for this search") ||
+							strings.Contains(lowerSnippet, "can't generate") ||
+							strings.Contains(lowerSnippet, "try again later") ||
+							strings.Contains(lowerSnippet, "i cannot fulfill") ||
+							strings.Contains(lowerSnippet, "i cannot provide") {
+							LogQueryFailure(queryStr, dorkQuery, "SGE_REFUSAL", snippet, reqFilters)
+							finalPayload.Error = "Google AI Overview refused to generate: " + snippet
+							foundData = true
+							break
+						}
+
 						jsonStart := strings.Index(snippet, "{")
 						jsonEnd := strings.LastIndex(snippet, "}") + 1
 						if jsonStart != -1 && jsonEnd > jsonStart {
@@ -1822,6 +1858,7 @@ func main() {
 							finalPayload.Data = EvaluateUSQLFunctions(query.ReturnFields, filteredData)
 							foundData = true
 						} else {
+							LogQueryFailure(queryStr, dorkQuery, "SGE_SCHEMALESS_RESPONSE", snippet, reqFilters)
 							finalPayload.Data = map[string]interface{}{
 								"raw_text_extracted": snippet,
 							}
@@ -1832,6 +1869,7 @@ func main() {
 			}
 
 			if !foundData {
+				LogQueryFailure(queryStr, dorkQuery, "NO_SEARCH_RESULTS", "Zero search responses returned from browser context", reqFilters)
 				finalPayload.Error = "no structured SGE overview resolved"
 			}
 
@@ -2743,5 +2781,28 @@ func createIsolatedTab(parentCtx context.Context) (context.Context, context.Canc
 
 	ctx, cancel := chromedp.NewContext(parentCtx, chromedp.WithTargetID(targetID))
 	return ctx, cancel, nil
+}
+
+// LogQueryFailure records parser, SGE, and organic search breakdowns inside a query failure forensic log.
+func LogQueryFailure(queryText, dorkQuery, failureType, rawSGEResponse string, resolvedFilters SearchFilters) {
+	file, err := os.OpenFile("query_failures.jsonl", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	failureEntry := map[string]interface{}{
+		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+		"raw_query":        queryText,
+		"compiled_dork":    dorkQuery,
+		"failure_type":     failureType, // e.g. "HYBRID_PARSE_ERROR", "NO_SEARCH_RESULTS", "SGE_REFUSAL", "SGE_SCHEMALESS_RESPONSE"
+		"raw_sge_response": rawSGEResponse,
+		"filters":          resolvedFilters,
+	}
+
+	data, err := json.Marshal(failureEntry)
+	if err == nil {
+		_, _ = file.Write(append(data, '\n'))
+	}
 }
 

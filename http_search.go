@@ -517,7 +517,7 @@ func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchRes
 			_, verdict := globalImmunizer.ProcessSGEResponse(q, r.Snippet, sgeSources, int(time.Since(startTime).Milliseconds()))
 			log.Printf("🛡️ [Vortex] Sanitization complete. Verdict: %s", verdict)
 			
-			if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" {
+			if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" && verdict != "NO_JSON_FOUND" && verdict != "PARSING_ERROR" {
 				out[i].Snippet = fmt.Sprintf("⚠️ [Vortex Security Alert] Indirect Prompt Injection Attack Neutralized.\nVerdict: %s", verdict)
 			}
 		}

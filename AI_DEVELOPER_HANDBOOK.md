@@ -66,9 +66,23 @@ To support dynamic hot-reloading without dropping search connections, `registry.
 *   **Zero-Dependency Directory Watcher:** `StartRegistryWatcher` runs a background polling loop checking the file count and sum of modification times in `ai_skills/` every 2 seconds, triggering `LoadSkillBookRegistry` seamlessly on changes.
 
 ### 2.3 Automated ZIP GitHub Installer
-`DownloadCommunitySkill` retrieves repository archives via native Go streams:
-1.  **Direct Download:** Ends with `.md` -> streams the raw markdown file directly.
-2.  **Repository Extract:** Points to GitHub -> fetches `main.zip` or `master.zip`, extracts all `.md` files in-memory using `archive/zip`, runs sandbox validations, and stages safe books in `unverified/`.
+### 2.4 Fault-Tolerant Hybrid Query Parser
+To handle arbitrary natural language queries at scale, the compiler exposes `ParseHybridQuery(input string) (*USQLQuery, error)`.
+*   **Formal vs Heuristic Parsing:**
+    *   If the query starts with `SEARCH` (case-insensitive), it runs the standard formal USQL parser.
+    *   If not, it executes a **Semantic Heuristic Parser** that auto-resolves the query:
+        1.  *Semantic Router Lookup:* Maps query text against cataloged Skill Books to fetch domains.
+        2.  *Target Entity Extraction:* Parses the query using prepositional templates (e.g. `ceo of [Entity]`, `funding for [Entity]`) or proper nouns.
+        3.  *Field Extraction:* Checks input tokens against keyword indexes (e.g., `ceo`, `valuation`, `funding`, `revenue`) to dynamically populate target properties.
+This converts normal search queries into optimized, structured SGE dork templates automatically.
+
+### 2.5 Query Failure Auditing standard
+To test operational bottlenecks and build query fallbacks within safety guidelines, failures are tracked inside the append-only `query_failures.jsonl` log file via `LogQueryFailure`.
+*   **Captured Failures:**
+    *   `HYBRID_PARSE_ERROR`: Syntactic anomalies during parsing.
+    *   `NO_SEARCH_RESULTS`: Browser contexts returning zero results.
+    *   `SGE_REFUSAL`: Google AI Overview blocking response with refusal markers (e.g. "not available for this search", "can't generate").
+    *   `SGE_SCHEMALESS_RESPONSE`: SGE returning standard text summaries instead of structured JSON.
 
 ---
 
@@ -135,7 +149,9 @@ When executing modifications, follow this three-step validation pipeline:
     *   TF-IDF Semantic query routing and matching.
     *   Sandbox quarantining and human promotions.
 3.  **Run Complex USQL Queries:**
-    Test nested schema parsing via standard shell flags:
+    Test nested schema parsing and hybrid translation:
     ```bash
-    ./ultrasearch -usql "SEARCH company:'Databricks' RETURN { founders: array({ name: UPPER(string), title: string }) }"
+    ./ultrasearch -usql "who is the ceo of company:Databricks"
     ```
+    Verify it maps to the correct target schema and prints the extracted text cleanly.
+
