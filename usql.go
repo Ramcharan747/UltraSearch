@@ -803,6 +803,177 @@ func evaluateSingleField(schemaVal interface{}, dataVal interface{}) interface{}
 	return dataVal
 }
 
+// extractNameWithTemplates finds and returns the proper name matching templates (both prefix and suffix)
+func extractNameWithTemplates(text string, templates []string) string {
+	namePattern := `(\p{Lu}\p{L}*(?:[-'.]\p{L}+)*\.?(?:[ \t]+\p{Lu}\p{L}*(?:[-'.]\p{L}+)*\.?)*)`
+	bestIndex := -1
+	bestName := ""
+
+	for _, temp := range templates {
+		pattern := strings.Replace(temp, "%s", namePattern, 1)
+		re := regexp.MustCompile(pattern)
+		
+		matches := re.FindAllStringSubmatchIndex(text, -1)
+		for _, match := range matches {
+			if len(match) >= 4 {
+				start := match[0]
+				gStart := match[2]
+				gEnd := match[3]
+				if gStart != -1 && gEnd != -1 {
+					name := strings.TrimSpace(text[gStart:gEnd])
+					if strings.HasSuffix(name, ".") {
+						name = strings.TrimSuffix(name, ".")
+					}
+					nameLower := strings.ToLower(name)
+					stopWords := map[string]bool{
+						"the": true, "a": true, "an": true, "she": true, "he": true, "they": true,
+						"it": true, "this": true, "that": true, "these": true, "those": true,
+						"who": true, "which": true, "what": true, "we": true, "you": true,
+						"our": true, "his": true, "her": true, "their": true, "its": true,
+					}
+					if stopWords[nameLower] {
+						continue
+					}
+					if bestIndex == -1 || start < bestIndex {
+						bestIndex = start
+						bestName = name
+					}
+				}
+			}
+		}
+	}
+	return bestName
+}
+
+// ExtractSchemaFromText parses unstructured natural text and extracts values matching USQL return schema keys
+func ExtractSchemaFromText(text string, schema map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	lowerText := strings.ToLower(text)
+
+	for key, schemaVal := range schema {
+		result[key] = nil
+		keyClean := strings.ReplaceAll(strings.ToLower(key), "_", " ")
+
+		switch key {
+		case "ceo", "chief_executive", "leader":
+			templates := []string{
+				`(?i:ceo\s+of\s+[\w\-']+\s+is\s+)%s`,
+				`(?i:ceo\s+is\s+)%s`,
+				`(?i:ceo\s*:\s*)%s`,
+				`(?i:chief\s+executive\s+officer\s+is\s+)%s`,
+				`(?i:chief\s+executive\s+is\s+)%s`,
+				`(?i:leader\s+is\s+)%s`,
+				`%s\s+(?i:is\s+the\s+ceo\s+of\s+[\w\-']+)`,
+				`%s\s+(?i:is\s+the\s+co-founder\s+and\s+ceo\s+of\s+[\w\-']+)`,
+				`%s\s+(?i:is\s+the\s+co-founder\s+and\s+ceo)`,
+				`%s\s+(?i:is\s+co-founder\s+and\s+ceo)`,
+				`%s\s+(?i:is\s+the\s+ceo)`,
+				`%s\s+(?i:is\s+ceo)`,
+				`%s\s+(?i:leads\s+the\s+company)`,
+				`(?i:ceo\s+)%s`,
+			}
+			name := extractNameWithTemplates(text, templates)
+			if name != "" {
+				result[key] = evaluateSingleField(schemaVal, name)
+			}
+
+		case "founder", "co_founder":
+			templates := []string{
+				`(?i:founded\s+by\s+)%s`,
+				`(?i:founder\s+is\s+)%s`,
+				`(?i:co-founder\s+is\s+)%s`,
+				`(?i:founder\s*:\s*)%s`,
+				`(?i:founder\s+)%s`,
+				`%s\s+(?i:is\s+the\s+founder\s+of\s+[\w\-']+)`,
+				`%s\s+(?i:is\s+co-founder\s+and\s+ceo)`,
+				`%s\s+(?i:co-founded\s+[\w\-']+)`,
+				`%s\s+(?i:is\s+the\s+founder)`,
+				`%s\s+(?i:is\s+founder)`,
+			}
+			name := extractNameWithTemplates(text, templates)
+			if name != "" {
+				result[key] = evaluateSingleField(schemaVal, name)
+			}
+
+		case "valuation", "latest_valuation_usd", "worth":
+			patterns := []string{
+				`valuation\s+of\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`valued\s+at\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`worth\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`valuation\s+is\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`((?:[$€£]|eur|usd|gbp)\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+			}
+			for _, p := range patterns {
+				re := regexp.MustCompile("(?i)" + p)
+				matches := re.FindStringSubmatch(text)
+				if len(matches) > 1 {
+					result[key] = evaluateSingleField(schemaVal, strings.TrimSpace(matches[1]))
+					break
+				}
+			}
+
+		case "funding", "total_funding_usd", "raised":
+			patterns := []string{
+				`raised\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`funding\s+of\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`total\s+funding\s+is\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`funding\s+raised\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`((?:[$€£]|eur|usd|gbp)\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+			}
+			for _, p := range patterns {
+				re := regexp.MustCompile("(?i)" + p)
+				matches := re.FindStringSubmatch(text)
+				if len(matches) > 1 {
+					result[key] = evaluateSingleField(schemaVal, strings.TrimSpace(matches[1]))
+					break
+				}
+			}
+
+		case "revenue", "arr":
+			patterns := []string{
+				`revenue\s+of\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`arr\s+of\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`sales\s+of\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`revenue\s+is\s+((?:[$€£]|eur|usd|gbp)?\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+				`((?:[$€£]|eur|usd|gbp)\s*[\d,]+(?:\.\d+)?\s*(?:billion|million|b|m)?\s*(?:usd|eur|gbp|dollars)?)`,
+			}
+			for _, p := range patterns {
+				re := regexp.MustCompile("(?i)" + p)
+				matches := re.FindStringSubmatch(text)
+				if len(matches) > 1 {
+					result[key] = evaluateSingleField(schemaVal, strings.TrimSpace(matches[1]))
+					break
+				}
+			}
+
+		default:
+			idx := strings.Index(lowerText, keyClean)
+			if idx != -1 {
+				sub := text[idx:]
+				words := strings.Fields(sub)
+				var vals []string
+				count := 0
+				for _, w := range words {
+					wLower := strings.ToLower(w)
+					if wLower == keyClean || wLower == "is" || wLower == "of" || wLower == "at" || wLower == ":" {
+						continue
+					}
+					vals = append(vals, w)
+					count++
+					if count >= 3 {
+						break
+					}
+				}
+				if len(vals) > 0 {
+					result[key] = evaluateSingleField(schemaVal, strings.Join(vals, " "))
+				}
+			}
+		}
+	}
+
+	return result
+}
+
 // RunUSQLDiagnostics parses and compiles mock queries to verify tokenizing and AST mapping
 func RunUSQLDiagnostics() {
 	fmt.Println("\n[*] Running USQL Language Compiler Diagnostics...")

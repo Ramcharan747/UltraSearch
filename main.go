@@ -563,7 +563,7 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 			if aiMode != "none" {
 				log.Printf("   🔍 W%d: '%s' -> Forcing browser search to fetch AI Overview (AI Mode: %s)", id, q, aiMode)
 			} else {
-				log.Printf("   ⚠️ W%d: Direct HTTP Search failed, falling back to browser search... (Error: %v)", id, q, err)
+				log.Printf("   ⚠️ W%d: Direct HTTP Search failed for '%s', falling back to browser search... (Error: %v)", id, q, err)
 			}
 			
 			// --- PHASE 0: Google Search (Browser Fallback / Sniffer) ---
@@ -1489,11 +1489,8 @@ func main() {
 						finalPayload.Data = EvaluateUSQLFunctions(query.ReturnFields, filteredData)
 						foundData = true
 					} else {
-						// Log failure to find structured JSON (even if some text is there)
 						LogQueryFailure(*usqlFlag, dorkQuery, "SGE_SCHEMALESS_RESPONSE", snippet, resolvedFilters)
-						finalPayload.Data = map[string]interface{}{
-							"raw_text_extracted": snippet,
-						}
+						finalPayload.Data = ExtractSchemaFromText(snippet, query.ReturnFields)
 						foundData = true
 					}
 				}
@@ -1859,9 +1856,7 @@ func main() {
 							foundData = true
 						} else {
 							LogQueryFailure(queryStr, dorkQuery, "SGE_SCHEMALESS_RESPONSE", snippet, reqFilters)
-							finalPayload.Data = map[string]interface{}{
-								"raw_text_extracted": snippet,
-							}
+							finalPayload.Data = ExtractSchemaFromText(snippet, query.ReturnFields)
 							foundData = true
 						}
 					}
