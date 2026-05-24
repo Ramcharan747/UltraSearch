@@ -1736,6 +1736,109 @@ func main() {
 				json.NewEncoder(w).Encode(SearchResponse{Query: query, Error: "no results"})
 			}
 		})
+
+		http.HandleFunc("/usql", func(w http.ResponseWriter, r *http.Request) {
+			queryStr := r.URL.Query().Get("q")
+			if queryStr == "" {
+				http.Error(w, "Missing 'q' parameter containing USQL query", http.StatusBadRequest)
+				return
+			}
+
+			parser := NewUSQLParser(queryStr)
+			query, err := parser.Parse()
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": "USQL Parse Error: " + err.Error()})
+				return
+			}
+
+			if len(query.Sources) == 0 {
+				if book, _, found := SemanticRouteQuery(query.SearchEntity); found {
+					query.Sources = book.Domains
+				}
+			}
+
+			dorkQuery := query.CompileToDorkQuery()
+			reqFilters := SearchFilters{
+				Language:   "browser",
+				Country:    "browser",
+				Uule:       "browser",
+				SafeSearch: "browser",
+				Tbs:        "browser",
+			}
+			if query.Language != "" {
+				reqFilters.Language = query.Language
+			}
+			if query.Country != "" {
+				reqFilters.Country = query.Country
+			}
+			if query.SafeSearch != "" {
+				reqFilters.SafeSearch = query.SafeSearch
+			}
+
+			responses := runSearchPipeline(browserCtx, []string{dorkQuery}, 5, *workersFlag, false, "only", *showBrowserFlag, *headlessFlag, reqFilters)
+
+			type USQLResponse struct {
+				Query        string                 `json:"usql_query"`
+				Entity       string                 `json:"search_entity"`
+				TargetSchema map[string]interface{} `json:"target_schema"`
+				Data         map[string]interface{} `json:"data"`
+				Error        string                 `json:"error,omitempty"`
+			}
+
+			var finalPayload USQLResponse
+			finalPayload.Query = queryStr
+			finalPayload.Entity = query.SearchEntity
+			finalPayload.TargetSchema = query.ReturnFields
+
+			foundData := false
+			for _, r := range responses {
+				for _, resItem := range r.Results {
+					if resItem.Rank == 0 {
+						var rawMap map[string]interface{}
+						snippet := resItem.Snippet
+						jsonStart := strings.Index(snippet, "{")
+						jsonEnd := strings.LastIndex(snippet, "}") + 1
+						if jsonStart != -1 && jsonEnd > jsonStart {
+							_ = json.Unmarshal([]byte(snippet[jsonStart:jsonEnd]), &rawMap)
+						}
+
+						if rawMap != nil {
+							filteredData := make(map[string]interface{})
+							for key := range query.ReturnFields {
+								foundVal := false
+								for k, v := range rawMap {
+									if strings.EqualFold(k, key) {
+										filteredData[key] = v
+										foundVal = true
+										break
+									}
+								}
+								if !foundVal {
+									filteredData[key] = nil
+								}
+							}
+							finalPayload.Data = EvaluateUSQLFunctions(query.ReturnFields, filteredData)
+							foundData = true
+						} else {
+							finalPayload.Data = map[string]interface{}{
+								"raw_text_extracted": snippet,
+							}
+							foundData = true
+						}
+					}
+				}
+			}
+
+			if !foundData {
+				finalPayload.Error = "no structured SGE overview resolved"
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(finalPayload)
+		})
+
 		log.Fatal(http.ListenAndServe(":"+*portFlag, nil))
 	}
 
