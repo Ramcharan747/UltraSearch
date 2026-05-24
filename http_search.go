@@ -502,5 +502,26 @@ func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchRes
 		})
 	})
 
+	// Run Vortex Output Immunizer on SGE parsed outputs
+	for i, r := range out {
+		if r.Rank == 0 {
+			var sgeSources []string
+			for _, organicRes := range out {
+				if organicRes.Rank > 0 {
+					sgeSources = append(sgeSources, organicRes.URL)
+				}
+			}
+			
+			log.Printf("🛡️ [Vortex] Sanitizing HTTP Google AI Overview output via Go Security Gateway...")
+			startTime := time.Now()
+			_, verdict := globalImmunizer.ProcessSGEResponse(q, r.Snippet, sgeSources, int(time.Since(startTime).Milliseconds()))
+			log.Printf("🛡️ [Vortex] Sanitization complete. Verdict: %s", verdict)
+			
+			if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" {
+				out[i].Snippet = fmt.Sprintf("⚠️ [Vortex Security Alert] Indirect Prompt Injection Attack Neutralized.\nVerdict: %s", verdict)
+			}
+		}
+	}
+
 	return out, nil
 }

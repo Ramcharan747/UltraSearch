@@ -483,6 +483,8 @@ const extractJS = `(maxResults) => {
     return out;
 }`
 
+var globalImmunizer *VortexImmunizer
+
 func init() {
 	err := solver.LoadTrajectories("solver/trajectories.json")
 	if err != nil {
@@ -492,6 +494,7 @@ func init() {
 	ReplenishCallback = func() {
 		ReplenishSessionPool(5)
 	}
+	globalImmunizer = NewVortexImmunizer()
 }
 
 // ==================== EXTRACTION FUNCTIONS ====================
@@ -785,6 +788,27 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 				log.Printf("   ⚠️ W%d: '%s' -> BLOCKED", id, q)
 				results <- SearchResponse{Query: q, Error: "blocked_by_captcha"}
 				continue
+			}
+
+			// Run Vortex Output Immunizer on any Google AI Overview (Rank == 0) SGE results
+			for i, r := range res {
+				if r.Rank == 0 {
+					var sgeSources []string
+					for _, organicRes := range res {
+						if organicRes.Rank > 0 {
+							sgeSources = append(sgeSources, organicRes.URL)
+						}
+					}
+					
+					log.Printf("🛡️ [Vortex] Sanitizing Google AI Overview output via Go Security Gateway...")
+					startTime := time.Now()
+					_, verdict := globalImmunizer.ProcessSGEResponse(q, r.Snippet, sgeSources, int(time.Since(startTime).Milliseconds()))
+					log.Printf("🛡️ [Vortex] Sanitization complete. Verdict: %s", verdict)
+					
+					if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" {
+						res[i].Snippet = fmt.Sprintf("⚠️ [Vortex Security Alert] Indirect Prompt Injection Attack Neutralized.\nVerdict: %s", verdict)
+					}
+				}
 			}
 
 			// Filter results based on aiMode
@@ -1259,6 +1283,7 @@ func main() {
 	portFlag := flag.String("port", "8080", "Port for the HTTP server")
 	formatFlag := flag.String("output-format", "json", "Output format (json, llm-dense)")
 	outputFlag := flag.String("output", "ultra_results.json", "Output JSON file path")
+	vortexDiagFlag := flag.Bool("vortex-diag", false, "Run Vortex Go Security and Telemetry Gateway diagnostics")
 	
 	stressFlag := flag.Bool("stress", false, "Run stress test suite")
 	stressCountFlag := flag.Int("stress-count", 30, "Total number of queries to run in stress test")
@@ -1276,6 +1301,11 @@ func main() {
 	listProfilesFlag := flag.Bool("list-profiles", false, "List all saved profiles and exit")
 	
 	flag.Parse()
+
+	if *vortexDiagFlag {
+		RunVortexDiagnostics()
+		return
+	}
 
 	if *listProfilesFlag {
 		profiles := filterManager.List()
