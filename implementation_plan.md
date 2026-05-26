@@ -1,73 +1,97 @@
-# Implementation Plan: USQL v4.0 & WI-OS Kernel v4.0 Architecture
+# Implementation Plan: Adaptive Query Routing & Sourcing Optimizer
 
-This plan establishes the comprehensive architecture of **USQL v4.0 (Enterprise Structured Query Protocol)** and the **WI-OS Kernel v4.0 (Dynamic Search Operating System)**. It scales the language to handle complex nested schemas and dynamic function execution, and introduces a modular package manager for hot-reloading community-contributed templates.
+This document establishes the architecture for the **Adaptive Query Routing & Sourcing Optimizer (AQRSO)** inside the UltraSearch compiler. It eliminates keyword-sorting bottlenecks and intent classification latency by implementing a local, deterministic **Entity-Attribute Semantic Switchboard** that intelligently rephrases and anchors search queries in a single pass. It also details the high-fidelity telemetry schema to support future local model training.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Dynamic Function Expressions (Grammar Expansion):** We are upgrading the USQL parser to handle nested function calls within the `RETURN` block—e.g., `RETURN { ceo: UPPER(string), arr: ESTIMATE_ARR(CONVERT_CURRENCY(number, 'EUR')) }`. By implementing a **Global Function Registry** in Go, developers can add custom functions, scaling the language standard library to 100,000+ functions without bloating the compiler.
+> **Deterministic Entity-Attribute Switchboard:** We are replacing the keyword switch statements with a unified POS/Entity classifier inside `usql.go`. This classifier parses the user query, extracts the main Entity (e.g., "Databricks") and target Attributes (e.g., "CEO", "valuation"), and dynamically binds the optimal search anchors.
 > 
-> **Recursive Nested Schema Parsing:** USQL v4.0 supports deep, multi-level nested JSON schema declarations natively—e.g., `RETURN { key_personnel: array({ name: string, title: string, background: { school: string } }) }`. The Go parser will recursively scan and validate these structures.
+> **Soft-Constraint Prompt Anchoring:** Instead of hard `site:` exclusions, we inject semantic anchors (e.g., `"according to official listings on Crunchbase"`) into SGE dorks. This guides Google's ranker to bubble up authoritative sources without causing hard search failures if a domain is unreachable or lacks a specific page.
 > 
-> **Dynamic Package Manager & Hot-Loader:** Bypasses manual cataloging entirely. WI-OS Kernel v4.0 runs a live background directory watcher. When a developer drops a new `.md` Skill Book or packages are downloaded via the community client (`./ultrasearch -install <github-url>`), the kernel dynamically hot-reloads them in-memory without connection dropouts.
+> **Supervised Training Logging (Telemetry):** To support future offline training of our own local models, we enforce a strict high-fidelity log structure inside `usage_telemetry.jsonl` containing:
+> 1. Raw User Query
+> 2. Output Format (JSON vs. Text)
+> 3. Compiled Query Dork
+> 4. Raw SGE Response (Ground Truth)
+> 5. Parsed/Extracted Output (Labels)
 > 
-> **AI-Human Sandbox Quarantine:** Every community package is quarantined in `unverified/`. The AI Sandbox checks dorks, domains, and properties for security breaches before queuing them for a 1-click human promotion command.
+> This provides a complete dataset of optimized input-output pairs.
 
 ---
 
 ## Technical Specifications & Architecture
 
-### 1. Extended USQL AST with Function Call Nodes
-```go
-type USQLQuery struct {
-    SearchEntity string
-    Sources      []string
-    ReturnFields map[string]interface{} // Support nested maps/fields
-    Confidence   float64
-    CacheTTL     time.Duration
-    Format       string
-    Language     string
-    Country      string
-    SafeSearch   string
-}
-
-type FuncExpr struct {
-	Name string
-	Args []interface{}
-	Type string // Return type
-}
+```
+                  ┌──────────────────────────────┐
+                  │ User Query + Output Format   │
+                  │ (JSON or Text)               │
+                  └──────────────┬───────────────┘
+                                 │
+                                 ▼
+                  ┌──────────────────────────────┐
+                  │ Entity-Attribute Switchboard │
+                  │ (POS / Noun-Phrase Parser)   │
+                  └──────────────┬───────────────┘
+                                 │
+                                 ├──────────────────────────────┐
+                                 ▼                              ▼
+                         [Format == JSON]               [Format == Text]
+                       ┌───────────────────┐          ┌───────────────────┐
+                       │ Inject Formatting │          │ Inject Summarizer │
+                       │ Force Headers     │          │ Headers           │
+                       └─────────┬─────────┘          └─────────┬─────────┘
+                                 │                              │
+                                 └──────────────┬───────────────┘
+                                                │
+                                                ▼
+                               ┌────────────────────────────────┐
+                               │ Soft-Constraint Sourcing       │
+                               │ (Domain & Anchor Injector)     │
+                               └────────────────┬───────────────┘
+                                                │
+                                                ▼
+                                 [Google Search / SGE Page]
+                                                │
+                                                ▼
+                               ┌────────────────────────────────┐
+                               │ Edge-Side Extraction & Cleanup │
+                               └────────────────┬───────────────┘
+                                                │
+                                                ▼
+                               ┌────────────────────────────────┐
+                               │ Telemetry Logger (JSONL)       │
+                               └────────────────────────────────┘
 ```
 
-### 2. Lexical Grammar Upgrades
-- **Symbols added:** `(`, `)`
-- **Grammar structure:** `FieldName: FunctionName(Arg1, Arg2)`
+### 1. Dynamic Routing & Query Expansion
+We implement a lightweight rule registry in `usql.go` that maps general categories of intent to domains and prompt anchors:
+* **Category: Business/Finance** (triggered by *valuation*, *funding*, *revenue*, *round*, *investor*, *ceo*, *founder*)
+  * *Anchor:* `"according to profiles on Crunchbase, PitchBook, or SEC filings"`
+* **Category: Academic/Science** (triggered by *paper*, *research*, *study*, *authors*, *arxiv*, *abstract*)
+  * *Anchor:* `"as documented in peer-reviewed publications on arXiv, PubMed, or Nature"`
+* **Category: Tech/Developer** (triggered by *library*, *package*, *code*, *compile*, *api*, *struct*)
+  * *Anchor:* `"verified in developer docs, GitHub repositories, or StackOverflow"`
 
----
+### 2. File Changes
 
-## Proposed Changes
+#### [MODIFY] [usql.go](file:///Users/ramcharan/Desktop/UltraSearch/usql.go)
+* Add `SourcingRule` struct and `SourcingRegistry` directory mapping category trigger keywords to query anchors.
+* Implement `ExtractEntityAndAttributes(query string) (entity string, attributes []string)` to dynamically isolate proper nouns and intent markers from user inputs.
+* Implement `CompileAdaptiveQuery(query string, format string) string` which combines the extracted entity, user attributes, selected profile prompt wrappers, and semantic search anchors.
+* Integrate period trimming and horizontal space limits inside `extractNameWithTemplates` to clean up text matches cleanly.
 
-### [MODIFY] [usql.go](file:///Users/ramcharan/Desktop/UltraSearch/usql.go)
-- Update Lexer to tokenize parentheses `(` and `)`.
-- Refactor the `RETURN` parser block to execute **recursive parsing** of nested braces `{}` and parentheses `()` for function expressions.
-- Implement the `GlobalFunctionRegistry` and pre-load common enterprise primitives (`UPPER`, `LOWER`, `CONVERT_CURRENCY`, `ESTIMATE_ARR`, `CLEAN_PII`).
-
-### [MODIFY] [registry.go](file:///Users/ramcharan/Desktop/UltraSearch/registry.go)
-- Implement background folder scanning that detects filesystem writes in `ai_skills/` and dynamically triggers `LoadSkillBookRegistry` in-memory.
-- Partition the semantic index into partitioned prefix buckets to handle highly scalable queries across thousands of active Skill Books.
-
-### [MODIFY] [contribution.go](file:///Users/ramcharan/Desktop/UltraSearch/contribution.go)
-- Implement an automated HTTPS package downloader (`DownloadCommunitySkill(gitURL string)`) that pulls templates directly from public Git repository archives.
-- Integrate the safety scanner to block any packages using arbitrary network requests, pastebin credentials mining, or shell commands inside SGE dorks.
-
-### [MODIFY] [main.go](file:///Users/ramcharan/Desktop/UltraSearch/main.go)
-- Expose the dynamic package installer flag `-install` and register the extended nested JSON-schema formatting printer.
+#### [MODIFY] [main.go](file:///Users/ramcharan/Desktop/UltraSearch/main.go)
+* Integrate `CompileAdaptiveQuery` into the CLI search pipeline and the API server endpoint.
+* Update `LogQueryFailure` and the telemetry writer to dump the high-fidelity `usage_telemetry.jsonl` log containing user inputs, dorks, raw context, and final labels.
 
 ---
 
 ## Verification Plan
 
-### Compiler & Integration Tests
-- Run unit scans on a massive query including nested function calls:
-  `SEARCH company:"TLC Capital" RETURN { board: array({ name: UPPER(string) }), arr: ESTIMATE_ARR(number) }`
-  Validate that the AST parses both the nested array schema and the `UPPER` function call.
-- Trigger `./ultrasearch -install "https://github.com/Ramcharan747/UltraSearch-Skills-Archive"` to verify the HTTPS downloader stages packages cleanly in staging, runs the safety scanner, and promotes them upon approval.
+### Automated Verification
+* Compile the binary: `go build -o ultrasearch`
+* Run test queries representing different output profiles and verify they extract correct attributes in a single pass:
+  * `./ultrasearch -usql "who is the founder of company:Databricks"` (Verify it outputs the name cleanly and logs the entry in `usage_telemetry.jsonl`).
+  * `./ultrasearch -usql "valuation of company:Databricks"` (Verify it extracts the currency figures correctly).
+* Inspect the telemetry logs to verify all fields are populated correctly.

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Real Estate Listing",
+  "description": "Schema for extracting data from real estate listings.",
+  "type": "object",
+  "properties": {
+    "address": {
+      "type": "string",
+      "description": "The full physical address of the property"
+    },
+    "price": {
+      "type": "number",
+      "description": "The listing price of the property in local currency"
+    },
+    "currency": {
+      "type": "string",
+      "description": "The currency code (e.g., USD, EUR)",
+      "default": "USD"
+    },
+    "bedrooms": {
+      "type": "integer",
+      "description": "Number of bedrooms"
+    },
+    "bathrooms": {
+      "type": "number",
+      "description": "Number of bathrooms (can be fractional, e.g. 1.5)"
+    },
+    "square_feet": {
+      "type": "number",
+      "description": "The total area of the property in square feet"
+    },
+    "property_type": {
+      "type": "string",
+      "description": "Type of property (e.g., Single Family, Condo, Townhouse, Apartment)"
+    },
+    "listing_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The direct URL to the property listing"
+    },
+    "agent_info": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the listing agent"
+        },
+        "agency": {
+          "type": "string",
+          "description": "Name of the real estate agency"
+        },
+        "contact_phone": {
+          "type": "string",
+          "description": "Contact phone number of the agent or agency"
+        }
+      }
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed text description of the property"
+    }
+  },
+  "required": ["address", "price", "listing_url"]
+}

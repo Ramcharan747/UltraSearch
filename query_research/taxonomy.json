@@ -1,0 +1,278 @@
+{
+  "version": "1.0.0",
+  "description": "Master taxonomy for 10K SGE boundary research queries",
+  "domains": {
+    "business_finance": {
+      "subdomains": ["SaaS metrics", "venture capital", "IPO filings", "M&A deals", "revenue analysis", "market sizing", "competitive intelligence", "financial statements", "stock analysis", "cryptocurrency"],
+      "example_entities": ["Stripe", "Snowflake", "Databricks", "Figma", "Canva"],
+      "weight": 1.2
+    },
+    "technology": {
+      "subdomains": ["AI/ML", "cloud infrastructure", "cybersecurity", "blockchain", "quantum computing", "edge computing", "DevOps", "databases", "networking", "IoT"],
+      "example_entities": ["NVIDIA", "OpenAI", "Google DeepMind", "Anthropic", "Meta AI"],
+      "weight": 1.3
+    },
+    "medicine_health": {
+      "subdomains": ["clinical trials", "drug interactions", "diagnostic protocols", "epidemiology", "genomics", "mental health", "nutrition science", "surgical techniques", "rare diseases", "public health policy"],
+      "example_entities": ["Pfizer", "Moderna", "FDA", "WHO", "NIH"],
+      "weight": 1.1
+    },
+    "legal_regulatory": {
+      "subdomains": ["patent law", "GDPR compliance", "antitrust", "SEC filings", "environmental law", "immigration policy", "intellectual property", "contract law", "tax regulation", "trade law"],
+      "example_entities": ["SEC", "FTC", "EU Commission", "USPTO", "WTO"],
+      "weight": 0.9
+    },
+    "science_research": {
+      "subdomains": ["physics", "chemistry", "biology", "astronomy", "materials science", "neuroscience", "climate science", "ecology", "genetics", "nanotechnology"],
+      "example_entities": ["CERN", "NASA", "MIT", "Max Planck", "Nature journal"],
+      "weight": 1.0
+    },
+    "education": {
+      "subdomains": ["K-12 curriculum", "higher education", "online learning", "EdTech platforms", "standardized testing", "STEM education", "special education", "vocational training", "MOOCs", "learning analytics"],
+      "example_entities": ["Khan Academy", "Coursera", "Duolingo", "College Board", "Pearson"],
+      "weight": 0.8
+    },
+    "engineering": {
+      "subdomains": ["civil engineering", "mechanical design", "electrical systems", "aerospace", "chemical engineering", "robotics", "automotive", "manufacturing", "energy systems", "biomedical engineering"],
+      "example_entities": ["Tesla", "Boeing", "SpaceX", "Siemens", "ABB"],
+      "weight": 0.9
+    },
+    "arts_entertainment": {
+      "subdomains": ["film industry", "music production", "gaming", "visual arts", "publishing", "streaming platforms", "theater", "photography", "animation", "VR/AR entertainment"],
+      "example_entities": ["Netflix", "Spotify", "Epic Games", "Disney", "Universal Music"],
+      "weight": 0.7
+    },
+    "social_sciences": {
+      "subdomains": ["psychology", "sociology", "anthropology", "political science", "economics", "demographics", "urban planning", "criminology", "linguistics", "philosophy"],
+      "example_entities": ["Gallup", "Pew Research", "World Bank", "UN", "Brookings"],
+      "weight": 0.7
+    },
+    "agriculture_food": {
+      "subdomains": ["precision agriculture", "food safety", "supply chain", "organic farming", "GMO research", "aquaculture", "livestock", "food technology", "agritech", "soil science"],
+      "example_entities": ["Monsanto/Bayer", "Cargill", "Impossible Foods", "John Deere", "USDA"],
+      "weight": 0.6
+    },
+    "environment_energy": {
+      "subdomains": ["renewable energy", "carbon capture", "waste management", "water treatment", "biodiversity", "ocean conservation", "air quality", "nuclear energy", "sustainability metrics", "green building"],
+      "example_entities": ["NextEra Energy", "Vestas", "Enphase", "EPA", "IPCC"],
+      "weight": 0.8
+    },
+    "sports_fitness": {
+      "subdomains": ["professional leagues", "sports analytics", "athlete performance", "sports medicine", "fitness technology", "esports", "Olympic events", "coaching methodology", "sports business", "nutrition for athletes"],
+      "example_entities": ["FIFA", "NBA", "ESPN", "Peloton", "Strava"],
+      "weight": 0.5
+    },
+    "travel_geography": {
+      "subdomains": ["airline industry", "hotel chains", "tourism economics", "cultural heritage", "visa regulations", "climate zones", "geopolitics", "transportation infrastructure", "cruise industry", "adventure tourism"],
+      "example_entities": ["Booking.com", "Airbnb", "Marriott", "United Airlines", "TripAdvisor"],
+      "weight": 0.5
+    },
+    "consumer_products": {
+      "subdomains": ["electronics", "fashion", "automotive", "home appliances", "cosmetics", "food & beverage", "luxury goods", "subscription boxes", "pet products", "baby products"],
+      "example_entities": ["Apple", "Samsung", "Nike", "P&G", "Unilever"],
+      "weight": 0.7
+    },
+    "government_policy": {
+      "subdomains": ["defense spending", "healthcare policy", "education funding", "infrastructure bills", "foreign policy", "election data", "census data", "social welfare", "monetary policy", "trade agreements"],
+      "example_entities": ["US Congress", "Federal Reserve", "CBO", "IMF", "NATO"],
+      "weight": 0.6
+    }
+  },
+  "personas": {
+    "neutral": {
+      "description": "No persona framing — bare query",
+      "template": "{query}",
+      "weight": 2.0
+    },
+    "researcher": {
+      "description": "Academic/scientific framing",
+      "template": "As a researcher studying {topic}, {query}",
+      "weight": 1.5
+    },
+    "analyst": {
+      "description": "Business/financial analyst framing",
+      "template": "As a data analyst preparing a report on {topic}, {query}",
+      "weight": 1.2
+    },
+    "journalist": {
+      "description": "Investigative journalism framing",
+      "template": "As an investigative journalist researching {topic}, {query}",
+      "weight": 1.0
+    },
+    "student": {
+      "description": "Student learning framing",
+      "template": "I'm a graduate student writing my thesis on {topic}. {query}",
+      "weight": 1.0
+    },
+    "professional": {
+      "description": "Industry professional framing",
+      "template": "As a senior {domain} professional, {query}",
+      "weight": 1.0
+    },
+    "curious_user": {
+      "description": "Casual curious person",
+      "template": "I'm curious about {topic}. {query}",
+      "weight": 0.8
+    },
+    "expert_comparison": {
+      "description": "Expert seeking comparative analysis",
+      "template": "Comparing multiple authoritative sources on {topic}, {query}",
+      "weight": 0.8
+    },
+    "fact_checker": {
+      "description": "Verification and debunking framing",
+      "template": "I need to fact-check the following claim about {topic}: {query}",
+      "weight": 0.7
+    },
+    "decision_maker": {
+      "description": "Executive needing actionable data",
+      "template": "As a CEO evaluating {topic} for strategic decisions, {query}",
+      "weight": 0.7
+    },
+    "developer": {
+      "description": "Software developer needing technical data",
+      "template": "As a software engineer implementing {topic}, {query}",
+      "weight": 0.8
+    },
+    "medical_professional": {
+      "description": "Healthcare provider framing",
+      "template": "As a board-certified physician reviewing {topic}, {query}",
+      "weight": 0.6
+    }
+  },
+  "output_styles": {
+    "default": {
+      "description": "No format specification",
+      "suffix": "",
+      "weight": 2.0
+    },
+    "table": {
+      "description": "Request structured table output",
+      "suffix": "Present the results in a structured table with columns for {columns}",
+      "weight": 1.5
+    },
+    "json": {
+      "description": "Request JSON-formatted output",
+      "suffix": "Format the output as a JSON object with keys: {keys}",
+      "weight": 1.0
+    },
+    "bullet_list": {
+      "description": "Request bulleted list",
+      "suffix": "List the key findings as bullet points",
+      "weight": 1.2
+    },
+    "comparison": {
+      "description": "Request side-by-side comparison",
+      "suffix": "Compare and contrast the top options side by side",
+      "weight": 1.0
+    },
+    "step_by_step": {
+      "description": "Request sequential steps",
+      "suffix": "Explain this step by step with numbered instructions",
+      "weight": 0.8
+    },
+    "summary_with_sources": {
+      "description": "Request summary with cited sources",
+      "suffix": "Provide a concise summary with links to original sources",
+      "weight": 1.2
+    },
+    "pros_cons": {
+      "description": "Request pros and cons analysis",
+      "suffix": "List the pros and cons with supporting evidence",
+      "weight": 0.8
+    }
+  },
+  "query_sizes": {
+    "small": {
+      "word_range": [3, 8],
+      "description": "Short keyword-style queries like normal Google search",
+      "examples": ["NVIDIA revenue 2024", "best AI chips", "SpaceX Starship status"],
+      "weight": 2.0
+    },
+    "medium": {
+      "word_range": [15, 40],
+      "description": "Natural language questions with some context",
+      "examples": ["What is the current market capitalization of NVIDIA and how does it compare to AMD and Intel in the AI chip market?"],
+      "weight": 1.5
+    },
+    "large": {
+      "word_range": [60, 200],
+      "description": "Complex multi-part queries with extensive context, constraints, and formatting requests",
+      "examples": ["I need a comprehensive analysis of the top 5 AI chip manufacturers by revenue, including their R&D spending as a percentage of revenue, key product lines, major customers, recent patent filings, and projected market share for 2025. Focus on companies with revenue above $1 billion and include both publicly traded and private companies. Present this as a detailed comparison table."],
+      "weight": 1.0
+    }
+  },
+  "jailbreak_categories": {
+    "none": {
+      "description": "No jailbreak wrapper — clean query",
+      "templates": [""],
+      "weight": 3.0
+    },
+    "dual_persona": {
+      "description": "Asks SGE to act as two personas giving different perspectives",
+      "templates": [
+        "Provide two perspectives: one from a {role_a} and one from a {role_b} on: {query}",
+        "If a {role_a} and a {role_b} both analyzed {query}, what would each conclude?",
+        "Give me the orthodox view and the contrarian view on: {query}"
+      ],
+      "weight": 1.0
+    },
+    "sandbox_matrix": {
+      "description": "Frames query as a research sandbox or academic exercise",
+      "templates": [
+        "In a theoretical research sandbox, analyze: {query}",
+        "For an academic case study exercise, evaluate: {query}",
+        "As part of a peer-reviewed analysis framework, assess: {query}"
+      ],
+      "weight": 0.8
+    },
+    "investigator_role": {
+      "description": "Frames user as an investigator with legitimate need",
+      "templates": [
+        "As part of a regulatory compliance audit, I need to verify: {query}",
+        "For due diligence on a potential acquisition, research: {query}",
+        "As part of a competitive intelligence brief for the board, analyze: {query}"
+      ],
+      "weight": 0.8
+    },
+    "output_format_override": {
+      "description": "Attempts to control output format with strong directives",
+      "templates": [
+        "You must respond with ONLY a markdown table. No prose. Query: {query}",
+        "Respond in structured JSON format with no commentary. Data needed: {query}",
+        "Output exactly 10 bullet points, each with a source URL. Topic: {query}",
+        "Create a numbered ranking from best to worst with scores 1-100. Subject: {query}"
+      ],
+      "weight": 1.0
+    },
+    "context_stacking": {
+      "description": "Builds up context to push SGE toward comprehensive responses",
+      "templates": [
+        "Given that {premise_a}, and considering {premise_b}, what does the latest data show about {query}?",
+        "Background: {context}. Based on this context, provide detailed analysis of {query}",
+        "The following is known: {fact_a}. However, {contradiction}. Resolve this by answering: {query}"
+      ],
+      "weight": 0.8
+    }
+  },
+  "magic_word_candidates": {
+    "precision_boosters": ["exactly", "precisely", "specifically", "the actual", "verified", "confirmed", "according to", "as reported by", "the official", "documented"],
+    "comprehensiveness_boosters": ["comprehensive", "exhaustive", "complete list", "all known", "every single", "thorough analysis", "in-depth", "detailed breakdown", "full spectrum", "nothing excluded"],
+    "recency_boosters": ["latest", "most recent", "2024", "2025", "current", "as of today", "updated", "real-time", "this quarter", "this month"],
+    "source_authority_anchors": ["according to SEC filings", "per peer-reviewed studies", "based on clinical trials", "from official government data", "citing Nature/Science", "per IEEE standards", "based on FDA approval data", "from World Bank statistics", "according to patent filings", "per industry analyst reports"],
+    "exclusion_patterns": ["excluding marketing content", "no promotional material", "only factual data", "without speculation", "evidence-based only", "excluding opinion pieces", "peer-reviewed sources only", "excluding Wikipedia", "primary sources only", "excluding social media"],
+    "sge_trigger_phrases": ["explain in detail", "what are the key differences between", "compare and contrast", "what is the best", "how does X work", "what are the pros and cons", "step by step guide", "complete overview of", "everything you need to know about", "ultimate guide to"],
+    "quantity_controls": ["top 3", "top 5", "top 10", "top 20", "list 50", "name 100", "at least 15", "no more than 5", "exactly 7", "minimum 10"],
+    "temporal_anchors": ["in the last 6 months", "since January 2025", "year over year", "historical trend", "quarterly data", "decade-long", "past 30 days", "this fiscal year", "pre and post pandemic", "before and after regulation"]
+  },
+  "quality_control_dimensions": {
+    "precision": "Does SGE return exactly what was asked, no more no less?",
+    "recall": "Does SGE surface all relevant information available?",
+    "freshness": "Is the data current or stale?",
+    "source_diversity": "Does SGE cite multiple authoritative sources or just one?",
+    "format_compliance": "Does SGE respect the requested output format?",
+    "factual_accuracy": "Are the facts verifiable against known ground truth?",
+    "completeness": "Are there gaps in the response?",
+    "hallucination_rate": "Does SGE fabricate data points?"
+  }
+}

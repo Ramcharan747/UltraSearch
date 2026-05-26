@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/exec"
@@ -534,6 +535,9 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 	for q := range queries {
 		start := time.Now()
 		
+		otelCtx, otelQuerySpan := TraceQueryStart(context.Background(), id, q, aiMode)
+		_ = otelCtx // use otelCtx if needed for further spans
+		
 		var res []SearchResult
 		var err error
 
@@ -545,6 +549,8 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 		
 		if runHTTP && err == nil && len(res) > 0 {
 			log.Printf("   🚀 W%d: '%s' -> Direct HTTP Search SUCCESS (Total = %v)", id, q, time.Since(start))
+			TraceQuerySuccess(otelCtx, id, len(res), time.Since(start))
+			otelQuerySpan.End()
 			
 			// Filter out AI Overview (rank 0) since aiMode is "none"
 			var filteredRes []SearchResult
@@ -849,6 +855,8 @@ func worker(id int, queries <-chan string, results chan<- SearchResponse, search
 
 		if len(organicIdxs) == 0 {
 			log.Printf("   ✅ W%d: '%s' -> %d results (no organic results for content extraction)", id, q, len(res))
+			TraceQuerySuccess(otelCtx, id, len(res), time.Since(start))
+			otelQuerySpan.End()
 			results <- SearchResponse{Query: q, Results: res}
 			continue
 		}
@@ -1309,6 +1317,15 @@ func main() {
 	installFlag := flag.String("install", "", "Install a community Skill Book template from a GitHub URL")
 	
 	flag.Parse()
+
+	shutdownOtel, _ := InitOtel("ultrasearch")
+	defer shutdownOtel(context.Background())
+
+	// Start memory management & profiling framework
+	go func() {
+		log.Println("🧠 Memory Profiler running on http://localhost:8081/debug/pprof/")
+		_ = http.ListenAndServe("localhost:8081", nil)
+	}()
 
 	if *vortexDiagFlag {
 		RunVortexDiagnostics()

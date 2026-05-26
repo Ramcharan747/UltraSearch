@@ -1,0 +1,3 @@
+- [2026-05-24T22:47:17+05:30] Initialized state from memory.md and soul.md.
+- [2026-05-24T22:47:17+05:30] Wrote `telemetry.go` integrating zerolog and Prometheus.
+- [2026-05-24T22:47:17+05:30] Added logging for engine decisions (`LogDecision`) and API latencies (`LogAPILatency`).

@@ -1,0 +1,108 @@
+### Query: `You are a food safety compliance auditor evaluating a commercial seafood processing facility. Develop a detailed hazard analysis and critical control point (HACCP) plan for preventing Listeria monocytogenes contamination in cold-smoked salmon. First, identify the critical control points (CCPs) in the processing line, specifically salting, smoking, and packaging. Second, define the critical limits for temperature, salt concentration, and moisture content. Third, outline the corrective actions and verification procedures required if critical limits are exceeded. Present the complete plan in a structured Markdown table, referencing only FDA seafood guidelines.`
+**Size:** `unknown`
+
+```text
+AI Overview
+Under U.S. Food and Drug Administration (FDA) guidelines, cold-smoked salmon is classified as a ready-to-eat (RTE) product where Listeria monocytogenes can survive processing and multiply during storage. Because the smoking process does not reach lethal temperatures for this pathogen, the HACCP strategy focuses on limiting bacterial growth through salt and moisture control, preventing recontamination, and rigorous environmental monitoring.
+\n| Critical Control Point (CCP) | Target Hazard | Critical Limits | Monitoring Procedure | Corrective Actions | Verification Procedures |\n| --- | --- | --- | --- | --- | --- |\n| 1. Salting / Brining | Listeria monocytogenes growth | Salt in the water phase (in the loin muscle) | Continuous measurement of salt concentration and immersion time for every batch. | Hold product and re-salt/extend brine time to meet limits. If unable to reach , divert product to a cooked-product line or destroy. | Review records within 1 week. Verify salt probe calibration monthly. Test finished product for water-phase salt quarterly. |\n| 2. Smoking / Drying | Listeria monocytogenes growth | Internal product temperature during smoking must not exceed (). Water phase moisture content (water activity awa sub w) must be lowered to control growth. | Monitor and record smokehouse temperature continuously. Measure moisture content per lot. | Adjust smoker controls immediately if temps rise above . If product exceeds critical moisture/ awa sub w limits, ...
+```
+
+---
+### Query: `You are a crop consultant advising a commercial potato grower on mitigating early blight (Alternaria solani). Step 1: Explain the weather conditions and leaf wetness duration required for spore germination. Step 2: Detail a protective spraying schedule using chlorothalonil, boscalid, and azoxystrobin, ensuring proper chemical rotation to prevent resistance development. Step 3: Present these recommendations in a structured Markdown table detailing growth stage, fungicide class, application rate, and rainfastness. Rely strictly on university extension bulletins and exclude home-gardening treatments.`
+**Size:** `unknown`
+
+```text
+AI Overview
+Early blight (Alternaria solani) management requires an integrated strategy to prevent premature defoliation and yield loss. The following steps outline weather conditions, spray rotations, and recommendations based on university extension guidelines. 
+Step 1: Weather Conditions and Leaf Wetness for Germination
+Spore (conidia) germination and infection by Alternaria solani require free moisture (from rain, dew, fog, or irrigation) and moderately warm temperatures. 
+Optimal Temperatures: Spore germination happens between 
+ and 
+ (with the absolute range being 
+ to 
+).
+Leaf Wetness Duration: Spores can germinate in as little as 40 to 120 minutes in the presence of free moisture. However, for active penetration and successful infection, leaves must remain continuously wet for 3 to 12 hours depending on the temperature.
+Disease Progression: Cycles from infection to lesion development and new spore production can occur in just 5 to 7 days, allowing the disease to explode rapidly in humid, warm conditions. 
+Step 2: Fungicide Program and Resistance Management
+To mitigate the risk of A. solani developing fungicide resistance, you must rotate chemistries and chemical classes. 
+Protectant (FRAC M05): Begin your program with a broad-spectrum protectant like chlorothalonil. This provides a foundational barrier on the leaf surface and has a low risk of resistance development.
+Succinate Dehydrogenase Inhibitor - SDHI (FRAC 7): Rotate to systemic/translaminar products like bosca...
+```
+
+---
+### Query: `According to studies in soil chemistry, how does the application of calcitic vs. dolomitic limestone alter the calcium-to-magnesium ratio in acidic clay loam soils? Detail the impact on soil structure and exchangeable cations, restricting your answer to agricultural soils in the Midwest US.`
+**Size:** `unknown`
+
+```text
+AI Overview
+Applying dolomitic limestone increases both exchangeable Calcium (Ca) and Magnesium (Mg), lowering the Ca:Mg ratio. Conversely, calcitic limestone primarily adds Ca, widening the Ca:Mg ratio. In Midwest US agricultural clay loams, both correct soil acidity, promoting favorable aggregate stability and nutrient availability. 
+Calcitic vs. Dolomitic Chemistry
+Calcitic Limestone: Consists mainly of calcium carbonate, typically containing 32-35% Ca and only 2-5% Mg. It increases the Ca:Mg ratio by flooding the soil exchange complex with 
+𝐶
+𝑎
+2
++
+ ions.
+Dolomitic Limestone: Contains a significant proportion of magnesium carbonate alongside calcium carbonate, yielding roughly 20-22% Ca and 11-13% Mg. It decreases or stabilizes the Ca:Mg ratio by proportionally adding much more elemental Mg to the soil. 
+Impact on Exchangeable Cations
+Neutralization of 
+𝐴
+𝑙
+3
++
+ and 
+𝐻
++
+: Both lime types raise soil pH by replacing exchangeable aluminum (
+𝐴
+𝑙
+3
++
+) and hydrogen (
+𝐻
++
+) ions on the soil's Cation Exchange Capacity (CEC) sites.
+Base Saturation: The application saturates the acidic clay loam with basic cations (
+𝐶
+𝑎
+2
++
+ and 
+𝑀
+𝑔
+2
++
+). While calcitic lime exclusively builds Ca saturation, dolomitic lime builds both simultaneously.
+Target Ratios: Midwestern agricultural studies (e.g., from Iowa State University and the University of Wisconsin) indicate that attempting to achieve an exact "favorable basic cation saturation ratio" (BCSR) between Ca and Mg is generally unnecessa...
+```
+
+---
+### Query: `Given the rising incidence of bacterial wilt in greenhouse tomato operations, explain the sanitation protocols required for recirculating hydroponic nutrient solutions. Focus on UV sterilization, ozonation, and chlorine dioxide treatments. Limit your advice to commercial greenhouse standards, excluding home gardening techniques.`
+**Size:** `unknown`
+
+```text
+AI Overview
+Sanitizing recirculating hydroponic solutions to combat Ralstonia solanacearum (bacterial wilt) requires multi-barrier commercial protocols. Primary disinfection involves either continuous UV irradiation or ozonation, while chlorine dioxide is predominantly reserved for shock treatments, system flushes, and managing localized biofilms. 
+1. UV Sterilization
+UV-C irradiation (
+) inactivates bacteria by damaging their DNA/RNA. 
+Protocol: The nutrient solution must be pre-filtered down to 
+ to prevent organic particulates from shadowing bacteria. For Ralstonia, a UV dose of at least 
+ is necessary.
+Maintenance: Requires routine monitoring of water transmittance. Quartz sleeves must be wiped clean of scale or biofilm, and UV lamps require replacement after reaching their manufacturer-rated hour limit (usually 
+).
+Nutrient Impact: UV light can degrade iron chelates (like Fe-EDTA). Growers typically compensate by using more stable chelates such as Fe-EDDHA. 
+2. Ozonation
+Ozone (
+𝑂
+3
+) is an aggressive oxidizer that ruptures bacterial cell walls, offering excellent pathogen control. 
+Protocol: Ozone is typically generated via an electrolytic cell or corona discharge and injected into a specialized contact tank rather than the main reservoir. A targeted oxidation-reduction potential (ORP) of 
+ is maintained.
+Safety & Root Health: Ozone is phytotoxic. The treated solution must pass through a catalytic degas tower or an activated carbon filter to strip residual ozone (
+𝑂
+3
+)...
+```
+
+---

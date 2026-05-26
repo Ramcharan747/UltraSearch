@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Academic Research Paper",
+  "description": "Schema for extracting metadata from academic publications and preprints.",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "The full title of the research paper"
+    },
+    "authors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of authors who contributed to the paper"
+    },
+    "abstract": {
+      "type": "string",
+      "description": "The abstract or summary of the paper"
+    },
+    "publication_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of publication (YYYY-MM-DD)"
+    },
+    "journal_or_conference": {
+      "type": "string",
+      "description": "Name of the journal, conference, or publication venue"
+    },
+    "doi": {
+      "type": "string",
+      "description": "Digital Object Identifier (DOI) for the paper"
+    },
+    "citations_count": {
+      "type": "integer",
+      "description": "Number of times the paper has been cited"
+    },
+    "pdf_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Direct link to download the PDF, if available"
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Keywords associated with the paper"
+    }
+  },
+  "required": ["title", "authors", "abstract"]
+}

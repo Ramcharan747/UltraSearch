@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Financial Asset",
+  "description": "Schema for extracting financial metrics and news for companies or assets.",
+  "type": "object",
+  "properties": {
+    "company_name": {
+      "type": "string",
+      "description": "The name of the company or asset"
+    },
+    "ticker_symbol": {
+      "type": "string",
+      "description": "The stock ticker symbol (e.g., AAPL, TSLA)"
+    },
+    "current_price": {
+      "type": "number",
+      "description": "The current trading price"
+    },
+    "currency": {
+      "type": "string",
+      "description": "Currency of the price (e.g., USD)",
+      "default": "USD"
+    },
+    "market_cap": {
+      "type": "number",
+      "description": "Market capitalization of the company"
+    },
+    "pe_ratio": {
+      "type": "number",
+      "description": "Price-to-Earnings ratio"
+    },
+    "dividend_yield": {
+      "type": "number",
+      "description": "Dividend yield percentage (e.g., 0.015 for 1.5%)"
+    },
+    "fifty_two_week_high": {
+      "type": "number",
+      "description": "52-week high price"
+    },
+    "fifty_two_week_low": {
+      "type": "number",
+      "description": "52-week low price"
+    },
+    "latest_news": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "published_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["headline", "url"]
+      },
+      "description": "Recent news articles relating to the company"
+    }
+  },
+  "required": ["company_name", "ticker_symbol", "current_price"]
+}

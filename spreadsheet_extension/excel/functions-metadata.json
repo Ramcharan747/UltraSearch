@@ -1,0 +1,25 @@
+{
+  "functions": [
+    {
+      "id": "ULTRA_SEARCH",
+      "name": "ULTRA_SEARCH",
+      "description": "Executes an AI research search on UltraSearch and streams the status.",
+      "helpUrl": "http://localhost:8082/spreadsheet_extension/harness.html",
+      "result": {
+        "type": "string",
+        "dimensionality": "scalar"
+      },
+      "options": {
+        "streaming": true
+      },
+      "parameters": [
+        {
+          "name": "query",
+          "description": "The search query target or company name.",
+          "type": "string",
+          "dimensionality": "scalar"
+        }
+      ]
+    }
+  ]
+}

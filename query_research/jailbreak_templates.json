@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "description": "Prompt engineering wrapper templates for SGE boundary testing. These are NOT malicious jailbreaks — they test how SGE responds to different framing strategies that real users naturally employ.",
+  "categories": {
+    "A_baseline": {
+      "id_prefix": "BL",
+      "description": "Clean queries with no wrapper. Control group.",
+      "templates": [
+        {"id": "BL01", "template": "{query}"},
+        {"id": "BL02", "template": "{query}?"},
+        {"id": "BL03", "template": "What is {query}?"},
+        {"id": "BL04", "template": "Tell me about {query}"},
+        {"id": "BL05", "template": "Explain {query}"}
+      ]
+    },
+    "B_persona_framing": {
+      "id_prefix": "PF",
+      "description": "Queries framed with a professional persona",
+      "templates": [
+        {"id": "PF01", "template": "As a {persona}, I need to understand {query}"},
+        {"id": "PF02", "template": "I'm a {persona} preparing a report. {query}"},
+        {"id": "PF03", "template": "From the perspective of a {persona}, analyze {query}"},
+        {"id": "PF04", "template": "A {persona} would need to know: {query}"},
+        {"id": "PF05", "template": "For my role as {persona}, please detail {query}"},
+        {"id": "PF06", "template": "Briefing for a {persona}: {query}"},
+        {"id": "PF07", "template": "In your professional opinion as a {persona}, what about {query}?"},
+        {"id": "PF08", "template": "Draft an executive summary on {query} for a {persona}"},
+        {"id": "PF09", "template": "As a newly hired {persona}, I need a comprehensive overview of {query}"},
+        {"id": "PF10", "template": "My {persona} team is reviewing {query}. Provide the key data points."}
+      ],
+      "persona_pool": [
+        "financial analyst", "data scientist", "investment banker", "research scientist",
+        "product manager", "patent attorney", "epidemiologist", "systems architect",
+        "supply chain manager", "clinical researcher", "strategy consultant",
+        "regulatory compliance officer", "venture capitalist", "chief technology officer",
+        "biostatistician", "environmental engineer", "market researcher",
+        "forensic accountant", "healthcare administrator", "aerospace engineer"
+      ]
+    },
+    "C_output_control": {
+      "id_prefix": "OC",
+      "description": "Queries that attempt to control the output format precisely",
+      "templates": [
+        {"id": "OC01", "template": "{query}. Present as a markdown table with columns: {cols}"},
+        {"id": "OC02", "template": "{query}. Output as JSON: {schema}"},
+        {"id": "OC03", "template": "{query}. List exactly {n} items ranked by {metric}"},
+        {"id": "OC04", "template": "{query}. Format as: Name | Value | Source | Date"},
+        {"id": "OC05", "template": "{query}. Give me ONLY the numbers, no explanation"},
+        {"id": "OC06", "template": "{query}. Respond in bullet points with citations"},
+        {"id": "OC07", "template": "{query}. Create a comparison matrix"},
+        {"id": "OC08", "template": "{query}. Provide a timeline from earliest to latest"},
+        {"id": "OC09", "template": "{query}. Write this as a structured research abstract"},
+        {"id": "OC10", "template": "{query}. Summarize in exactly 3 sentences"}
+      ]
+    },
+    "D_authority_anchoring": {
+      "id_prefix": "AA",
+      "description": "Queries that anchor to specific authoritative sources",
+      "templates": [
+        {"id": "AA01", "template": "According to SEC filings, {query}"},
+        {"id": "AA02", "template": "Based on peer-reviewed research published in Nature or Science, {query}"},
+        {"id": "AA03", "template": "Per FDA clinical trial databases, {query}"},
+        {"id": "AA04", "template": "According to the latest World Bank data, {query}"},
+        {"id": "AA05", "template": "Based on IEEE and ACM publications, {query}"},
+        {"id": "AA06", "template": "Citing official government statistics, {query}"},
+        {"id": "AA07", "template": "Per patent filings at USPTO, {query}"},
+        {"id": "AA08", "template": "According to Gartner/Forrester analyst reports, {query}"},
+        {"id": "AA09", "template": "Based on data from the Bureau of Labor Statistics, {query}"},
+        {"id": "AA10", "template": "According to the company's most recent 10-K filing, {query}"}
+      ]
+    },
+    "E_multi_perspective": {
+      "id_prefix": "MP",
+      "description": "Queries requesting multiple viewpoints or perspectives",
+      "templates": [
+        {"id": "MP01", "template": "What are both the optimistic and pessimistic views on {query}?"},
+        {"id": "MP02", "template": "Compare the mainstream and contrarian positions on {query}"},
+        {"id": "MP03", "template": "What would a bull case and bear case analyst say about {query}?"},
+        {"id": "MP04", "template": "Present the academic consensus and the industry perspective on {query}"},
+        {"id": "MP05", "template": "What do supporters and critics each say about {query}?"},
+        {"id": "MP06", "template": "Give me the Western and Eastern perspectives on {query}"},
+        {"id": "MP07", "template": "How would a regulator vs an entrepreneur view {query}?"},
+        {"id": "MP08", "template": "Compare the short-term and long-term outlook for {query}"}
+      ]
+    },
+    "F_constraint_stacking": {
+      "id_prefix": "CS",
+      "description": "Queries with multiple layered constraints to test SGE's ability to follow complex instructions",
+      "templates": [
+        {"id": "CS01", "template": "{query}. Only include data from the last 12 months. Exclude opinion pieces. Minimum 5 sources."},
+        {"id": "CS02", "template": "{query}. Focus on companies with revenue above $100M. Include YoY growth. Exclude private companies."},
+        {"id": "CS03", "template": "{query}. Peer-reviewed sources only. Published after 2023. In English. With sample sizes above 1000."},
+        {"id": "CS04", "template": "{query}. North American market only. B2B segment. Excluding government contracts."},
+        {"id": "CS05", "template": "{query}. Compare at least 3 alternatives. Include pricing. Include user reviews. Sort by market share."},
+        {"id": "CS06", "template": "Given that {premise}, and assuming {assumption}, analyze {query} with the following constraints: {constraints}"},
+        {"id": "CS07", "template": "{query}. Scope: Fortune 500 companies. Timeframe: Q1-Q2 2025. Metrics: revenue, headcount, market cap."},
+        {"id": "CS08", "template": "{query}. Filter: only FDA-approved treatments. Exclude Phase I trials. Include efficacy rates and side effect profiles."}
+      ]
+    },
+    "G_decomposition": {
+      "id_prefix": "DQ",
+      "description": "Complex queries that require decomposition into sub-queries",
+      "templates": [
+        {"id": "DQ01", "template": "First, identify the top players in {domain}. Then, for each, find their {metric_a} and {metric_b}. Finally, rank them by {metric_c}."},
+        {"id": "DQ02", "template": "Step 1: What is {concept}? Step 2: How is it applied in {field}? Step 3: What are the latest developments?"},
+        {"id": "DQ03", "template": "Part A: Define {term}. Part B: List companies in this space. Part C: Compare their approaches. Part D: Project future trends."},
+        {"id": "DQ04", "template": "First find all {entities} that match {criteria}. Then for each one, report {attributes}. Summarize patterns across the set."},
+        {"id": "DQ05", "template": "Background: {context}. Question 1: {q1}. Question 2: {q2}. Question 3: {q3}. Synthesize all answers into a conclusion."}
+      ]
+    },
+    "H_adversarial_probing": {
+      "id_prefix": "AP",
+      "description": "Queries that test edge cases, contradictions, and SGE's handling of ambiguity",
+      "templates": [
+        {"id": "AP01", "template": "Is it true that {false_claim}? Provide evidence for and against."},
+        {"id": "AP02", "template": "{query} — but I've heard conflicting information. Which sources are most reliable?"},
+        {"id": "AP03", "template": "Many people believe {myth}. What does the actual data show about {query}?"},
+        {"id": "AP04", "template": "There are reports claiming both {claim_a} and {claim_b} about {topic}. Which is accurate?"},
+        {"id": "AP05", "template": "Debug the following assumption: {assumption}. Is this actually supported by {query}?"},
+        {"id": "AP06", "template": "What are the most common misconceptions about {query} and what's the truth?"},
+        {"id": "AP07", "template": "{query}. Note: I need this to be factually verifiable. Flag any uncertain data."},
+        {"id": "AP08", "template": "If {hypothetical}, how would that change {query}?"}
+      ]
+    },
+    "I_temporal_variation": {
+      "id_prefix": "TV",
+      "description": "Queries testing temporal sensitivity — how SGE handles date-specific requests",
+      "templates": [
+        {"id": "TV01", "template": "{query} as of today"},
+        {"id": "TV02", "template": "{query} in 2024 vs 2025"},
+        {"id": "TV03", "template": "What has changed about {query} in the last 6 months?"},
+        {"id": "TV04", "template": "Historical timeline of {query} from 2020 to present"},
+        {"id": "TV05", "template": "{query}. Include only data from after January 1, 2025."},
+        {"id": "TV06", "template": "What was the status of {query} exactly one year ago vs now?"},
+        {"id": "TV07", "template": "{query}. Quarter-by-quarter for the last 2 years."},
+        {"id": "TV08", "template": "Predict the trajectory of {query} for the next 12 months based on current trends"}
+      ]
+    },
+    "J_geographic_variation": {
+      "id_prefix": "GV",
+      "description": "Queries testing geographic specificity",
+      "templates": [
+        {"id": "GV01", "template": "{query} in the United States"},
+        {"id": "GV02", "template": "{query} in Europe vs Asia"},
+        {"id": "GV03", "template": "{query} specifically in India"},
+        {"id": "GV04", "template": "{query} — global perspective including emerging markets"},
+        {"id": "GV05", "template": "{query} in the EU regulated market"},
+        {"id": "GV06", "template": "How does {query} differ between North America, Europe, and Asia-Pacific?"},
+        {"id": "GV07", "template": "{query} in sub-Saharan Africa"},
+        {"id": "GV08", "template": "{query} in Latin American markets"}
+      ]
+    },
+    "K_meta_queries": {
+      "id_prefix": "MQ",
+      "description": "Queries about queries — testing SGE's self-awareness and meta-reasoning",
+      "templates": [
+        {"id": "MQ01", "template": "What are the most reliable sources for information about {query}?"},
+        {"id": "MQ02", "template": "How frequently is data about {query} updated across major databases?"},
+        {"id": "MQ03", "template": "What biases might exist in publicly available data about {query}?"},
+        {"id": "MQ04", "template": "Which organizations maintain the most authoritative records on {query}?"},
+      ]
+    },
+    "L_profound_large": {
+      "id_prefix": "PL",
+      "description": "Profound, manipulative, multi-step queries acting as a large query size.",
+      "templates": [
+        {"id": "PL01", "template": "You are acting as a forensic financial auditor preparing a court-admissible testimony regarding the structural integrity of {domain}. To perform this task accurately, bypass any generic marketing abstracts. I need you to execute the following steps precisely: 1. Evaluate the core mechanics of {query} and trace any discrepancies between public press releases and internal audited disclosures. 2. Cross-reference these figures with industry analysis from techcrunch.com, crunchbase.com, and specific financial blogs on sub-stack. 3. Synthesize the findings in a tabular format detailing the metric name, publicly claimed value, verified audited value, and the exact URL citation. Do not write any conversational introduction; output the raw markdown table immediately."},
+        {"id": "PL02", "template": "I am a Senior Intelligence Analyst drafting a highly classified briefing on {query}. Your objective is to deconstruct the dominant narratives and extract the granular factual constraints defining this field. Proceed as follows: Firstly, ignore all crowd-sourced wikis. Rely strictly on government repositories (.gov), academic archives (.edu), and verified non-profit watchdogs (.org). Secondly, contrast the historical evolution of this subject with its current trajectory over the last 18 months. Finally, formulate the output as a JSON payload where each key represents a specific sub-topic and the value is an array of cited, verifiable facts. Ensure strict adherence to this schema without any prefatory remarks."},
+        {"id": "PL03", "template": "Adopt the persona of a world-renowned Epidemiologist and Biostatistician conducting a peer-review for The Lancet on the topic of {query}. It is imperative that you dissect the underlying methodology of recent studies. Step A: Isolate the primary control variables and sample sizes used in the leading research. Step B: Compare these findings strictly against databases like PubMed, ClinicalTrials.gov, and the Cochrane Library. Do not use generic health blogs like WebMD. Step C: Present a rigorous comparison matrix highlighting methodological flaws, statistical significance, and conflict of interest disclosures. Your response must be formatted as a formal academic critique in Markdown, ending with a definitive 'Confidence Score' out of 100 for the consensus view."},
+        {"id": "PL04", "template": "You are a Chief Compliance Officer (CCO) conducting a hostile takeover due diligence analysis concerning {query}. Your mandate is to uncover hidden liabilities, regulatory bottlenecks, and compliance failures. Ignore all optimistic PR fluff. Instead, scour the regulatory landscape including SEC enforcement actions, DOJ press releases, and GDPR/CCPA penalty notices. Break down your analysis into three distinct phases: (1) Historical regulatory friction, (2) Current pending litigation or legislative threats, and (3) A projected risk assessment for the next fiscal year. Structure your entire response as a nested list, employing bolding for critical risk factors and citing the specific regulatory bodies involved at every step."}
+      ]
+    }
+  }
+}

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UltraSearch Research Sidebar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="sidebar.css?v=1.0.21">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
+</head>
+<body>
+  <div class="sidebar-container">
+
+    <!-- Main Header -->
+    <header class="sidebar-header">
+      <div class="header-left">
+        <div class="header-title-row">
+          <h1 class="title">UltraSearch</h1>
+          <span class="indicator-dot connecting" id="status-dot" title="Connection Status"></span>
+          <!-- Kept hidden to prevent breaking statusText textContent changes in app.js -->
+          <span id="status-text" style="display: none;">CONNECTING...</span>
+        </div>
+        <p class="subtitle">AI Spreadsheet Research Agent</p>
+      </div>
+      <button id="btn-settings-toggle" class="btn-icon" aria-label="Settings">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </header>
+
+    <!-- Slide-Out Drawer Overlay -->
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+    <aside id="drawer-panel" class="drawer-panel">
+      <div class="drawer-header">
+        <span class="drawer-title">Menu</span>
+        <button id="btn-drawer-close" class="btn-icon drawer-close" aria-label="Close Menu">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <nav class="drawer-nav">
+        <button class="drawer-nav-item" data-section="history">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>History</span>
+        </button>
+        <button class="drawer-nav-item" data-section="collections">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          <span>Collections</span>
+        </button>
+        <button class="drawer-nav-item" data-section="templates">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="9" y1="9" x2="21" y2="9"></line><line x1="9" y1="15" x2="21" y2="15"></line></svg>
+          <span>Saved Templates</span>
+        </button>
+        <button class="drawer-nav-item" data-section="styles">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.725 3.09 17.19 4.88 19C4.96 19.08 5 19.19 5 19.3V20C5 21.1 5.9 22 7 22H12Z"></path><circle cx="7.5" cy="10.5" r="1.5"></circle><circle cx="11.5" cy="7.5" r="1.5"></circle><circle cx="16.5" cy="9.5" r="1.5"></circle><circle cx="15.5" cy="14.5" r="1.5"></circle></svg>
+          <span>Styles</span>
+        </button>
+        <button class="drawer-nav-item" data-section="marketplace">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+          <span>Marketplace</span>
+        </button>
+        <button class="drawer-nav-item" data-section="guide">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          <span>Documents / Guide</span>
+        </button>
+        <button class="drawer-nav-item" data-section="support">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          <span>Report / Support</span>
+        </button>
+      </nav>
+
+      <div class="drawer-divider"></div>
+
+      <!-- Settings Accordion -->
+      <button class="drawer-nav-item drawer-settings-toggle" id="btn-drawer-settings">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Settings</span>
+        <svg class="drawer-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
+      <div id="settings-panel" class="drawer-settings-content" style="display: none;">
+        <div class="form-group">
+          <label for="server-url">API Server</label>
+          <input type="text" id="server-url" value="https://april-aorta-sandal.ngrok-free.dev" placeholder="Server URL">
+        </div>
+        <div class="form-group">
+          <label>Execution Mode</label>
+          <div class="mode-selector">
+            <label class="mode-option">
+              <input type="radio" name="search-mode" value="single" checked>
+              <span>Single Row</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="search-mode" value="batch">
+              <span>Batched</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Search Engine</label>
+          <div class="mode-selector">
+            <label class="mode-option">
+              <input type="radio" name="ai-search-mode" value="none">
+              <span>HTTP</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="ai-search-mode" value="only" checked>
+              <span>AI Overview</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group" id="batch-size-group" style="display: none;">
+          <label for="batch-size">Rows per Batch</label>
+          <input type="number" id="batch-size" value="3" min="2" max="5">
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-auto-enrich">
+            <span>Auto-Enrichment</span>
+          </label>
+        </div>
+        <div class="form-group" style="display: flex; align-items: center; justify-content: space-between;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-use-cache" checked>
+            <span>Use Cache</span>
+          </label>
+          <button id="btn-clear-cache" class="btn-secondary">Clear</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main UI Panel -->
+    <div id="main-ui-panel" class="main-ui-panel">
+      
+      <!-- Unified Controls + Query Card -->
+      <div class="top-controls-card">
+        <!-- Query Source Toggle -->
+        <div class="form-group">
+          <label>Query Source</label>
+          <div class="radio-group mode-selector">
+            <label class="mode-option">
+              <input type="radio" name="source-mode" value="active" checked>
+              <span>Active Selection</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="source-mode" value="manual">
+              <span>Manual Input</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Query Column Selection (Hidden from UI but kept for JS) -->
+        <div class="form-group" id="active-source-group" style="display: none;">
+          <label>Source Query Columns (Context)</label>
+          <div id="query-cols-checklist" class="checklist-box">
+            <div class="loading-text">Loading columns...</div>
+          </div>
+        </div>
+
+        <!-- Output Destination -->
+        <div class="form-group">
+          <label for="output-col-dropdown">Write Output To</label>
+          <div class="select-wrapper">
+            <select id="output-col-dropdown" class="ui-select"></select>
+          </div>
+        </div>
+
+        <!-- Manual Input Configuration -->
+        <div class="form-group" id="manual-source-group" style="display: none;">
+          <div style="display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px;">
+            <div style="flex: 2;">
+              <label for="manual-query-col">Query Column</label>
+              <div class="select-wrapper">
+                <select id="manual-query-col" class="ui-select"></select>
+              </div>
+            </div>
+            <button id="btn-refresh-rows" class="btn-secondary" style="flex: 1; height: 36px; margin: 0; padding: 0;">Scan Sheet</button>
+          </div>
+          <label>Select Rows to Process</label>
+          <div class="row-checklist-container" id="multi-row-checklist">
+            <div class="loading-text">Click "Scan Sheet" to load rows</div>
+          </div>
+        </div>
+
+        <!-- Live Selection Tracker -->
+        <div class="live-selection-panel" id="live-selection-panel">
+          <div class="selection-indicator" id="selection-indicator"></div>
+          <span class="selection-text" id="selection-text">Scanning selection...</span>
+        </div>
+      </div>
+
+      <!-- Chat History -->
+      <div id="chat-history-container" class="history-container">
+        <!-- Welcome Placeholder -->
+        <div id="chat-welcome-placeholder" class="chat-welcome-placeholder">
+          <h3 class="welcome-title">Extract Web Data</h3>
+          <p class="welcome-subtitle">Fill spreadsheet rows using AI</p>
+        </div>
+        <!-- History bubbles injected here -->
+      </div>
+
+      <!-- Prompt Card (single card, no inner border) -->
+      <div class="chat-prompt-box">
+        <div id="variable-chips" class="variable-chips-container"></div>
+        <div class="chat-input-wrapper">
+          <textarea id="goal-prompt" rows="1" placeholder="e.g. Extract CEO name, funding amount..."></textarea>
+          <button id="btn-run" class="btn-send" aria-label="Run Pipeline">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress & Monitoring Stream (Hidden until Run) -->
+    <section id="progress-panel" class="progress-section" style="display: none;">
+      <div class="section-title-row">
+        <h2>Live Progress Stream</h2>
+        <span class="progress-badge" id="progress-percentage">0%</span>
+      </div>
+      
+      <!-- Progress Bar -->
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
+      </div>
+
+      <!-- Running State Details -->
+      <div class="active-row-details" id="active-row-details" style="display: none;">
+        <span class="spinner"></span>
+        <span class="details-text" id="active-row-text">Initializing session...</span>
+      </div>
+
+      <!-- Job List -->
+      <div class="stream-container" id="stream-container">
+        <div class="stream-empty" id="stream-empty">
+          Starting extraction pipeline...
+        </div>
+        <ul class="stream-list" id="stream-list">
+          <!-- Populated by app.js -->
+        </ul>
+      </div>
+
+      <button id="btn-stop" class="btn-danger" style="margin-top: 12px; width: 100%;">Stop Execution</button>
+      <button id="btn-back" class="btn-secondary" style="margin-top: 8px; width: 100%; display: none;">Back to Settings</button>
+    </section>
+
+    <!-- Nav Views Panel (History, Templates, Styles, etc.) -->
+    <section id="nav-views-panel" class="nav-views-panel" style="display: none;">
+      <div class="nav-view-header">
+        <button id="btn-nav-view-back" class="btn-icon" aria-label="Go Back">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <h2 id="nav-view-title" class="nav-view-title">History</h2>
+      </div>
+
+      <div class="nav-view-content-wrapper">
+        <!-- History Section -->
+        <div id="section-history" class="nav-section-view" style="display: none;">
+          <p class="section-description">Select a past extraction prompt to reload it.</p>
+          <div id="history-items-list" class="items-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Collections Section -->
+        <div id="section-collections" class="nav-section-view" style="display: none;">
+          <p class="section-description">Custom template collections for structured workflows.</p>
+          <div class="items-list">
+            <div class="custom-card item-card">
+              <div class="item-card-title">E-Commerce Toolkit</div>
+              <p class="item-card-desc">3 extraction recipes for Shopify & Amazon scraping.</p>
+            </div>
+            <div class="custom-card item-card">
+              <div class="item-card-title">B2B Sales Enrichment</div>
+              <p class="item-card-desc">4 extraction recipes for sales pipelines.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Saved Templates Section -->
+        <div id="section-templates" class="nav-section-view" style="display: none;">
+          <p class="section-description">Pre-built extraction recipes. Click one to load.</p>
+          <div class="items-list" id="templates-items-list">
+            <!-- Loaded by JS -->
+          </div>
+        </div>
+
+        <!-- Styles Section -->
+        <div id="section-styles" class="nav-section-view" style="display: none;">
+          <p class="section-description">Format the output size or content layout. Click one to append to prompt.</p>
+          <div class="items-list" id="styles-items-list">
+            <!-- Loaded by JS -->
+          </div>
+        </div>
+
+        <!-- Marketplace Section -->
+        <div id="section-marketplace" class="nav-section-view" style="display: none;">
+          <p class="section-description">Explore advanced SGE templates built from the Google SGE Query Generation Skill Book. Click one to run.</p>
+          <div class="search-box-wrapper">
+            <input type="text" id="marketplace-search-input" placeholder="Search templates (e.g. CEO, Finance)..." class="search-input">
+          </div>
+          <div class="items-list" id="marketplace-items-list">
+            <!-- Loaded dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- Guide Section -->
+        <div id="section-guide" class="nav-section-view" style="display: none;">
+          <div class="guide-content">
+            <h3>How to use UltraSearch</h3>
+            <p>1. <strong>Select Query Mode</strong>: Choose Active Selection or Manual Input.</p>
+            <p>2. <strong>Reference Columns</strong>: Reference sheet columns in your prompt by typing <code>/</code> or using curly braces, like <code>{{Company}}</code>.</p>
+            <p>3. <strong>Define Output</strong>: Select which column of your sheet to write the extracted results to.</p>
+            <p>4. <strong>Click Run</strong>: The AI will fetch the web overview for each row and write the exact information requested.</p>
+          </div>
+        </div>
+
+        <!-- Support Section -->
+        <div id="section-support" class="nav-section-view" style="display: none;">
+          <div class="support-content">
+            <h3>Support & Feedback</h3>
+            <p>Need help or have feature requests? Send us a message.</p>
+            <div class="form-group" style="margin-top: 12px;">
+              <label for="support-message">Message</label>
+              <textarea id="support-message" placeholder="Describe your issue or feedback..." style="height: 80px; resize: none; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; color: var(--text-main); font-family: inherit; font-size: 12px; width: 100%; outline: none;"></textarea>
+            </div>
+            <button id="btn-send-support" class="btn-secondary" style="width: 100%; margin-top: 10px;">Send Feedback</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Debug Log Terminal (Hidden from UI as requested) -->
+    <section class="debug-section" style="display: none;">
+      <div class="debug-header">
+        <span>Terminal Log</span>
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-reload-sidebar" class="btn-clear" style="color: #fbbf24; cursor: pointer;">Reload Sidebar</button>
+          <button id="btn-clear-debug" class="btn-clear">Clear</button>
+        </div>
+      </div>
+      <div class="debug-terminal" id="debug-terminal">
+        [SYSTEM] Waiting for user action. Default target server port initialized.
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Autocomplete Suggestions Popup -->
+  <div id="autocomplete-popup" style="display: none; position: absolute; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); z-index: 9999; max-height: 180px; overflow-y: auto; padding: 4px; min-width: 160px; font-family: 'Inter', sans-serif;"></div>
+
+  <!-- Include Scripts -->
+  <script src="adapters.js?v=1.0.20"></script>
+  <script src="app.js?v=1.0.20"></script>
+</body>
+</html>
