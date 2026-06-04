@@ -53,25 +53,51 @@ sequenceDiagram
     US-->>User: Pure JSON data (bypassed all protections)
 ```
 
-### What GhostSearch Can Extract
-We have tested and proven extraction across **14 domains**:
+### 🔥 Real Use Cases: Prompts & Outputs
 
-| Category | Targets | Data Extracted |
-| :--- | :--- | :--- |
-| 💰 **Financial Intelligence** | Crunchbase, PitchBook, Dealroom | Funding rounds, valuations, investors |
-| ⚖️ **Legal Intelligence** | PACER, Justia, CourtListener | Case numbers, plaintiffs, filing dates |
-| 🏥 **Healthcare Directories** | NPI Registry, WebMD | NPI numbers, clinic addresses, phone numbers |
-| 🗳️ **Political Finance** | OpenSecrets, FEC | PAC donations, dark money, recipient parties |
-| 🔬 **Academic Research** | arXiv, Google Scholar | Paper titles, authors, DOIs, abstracts |
-| 🚢 **Supply Chain** | ImportGenius, Panjiva | Bills of Lading, ports, supplier names |
-| 🏛️ **Government Contracts** | SAM.gov | Award IDs, contractor names, NAICS codes |
-| 📊 **Executive Compensation** | SEC Edgar (DEF 14A) | CEO salaries, stock awards, total comp |
-| 🏠 **Real Estate** | Zillow, ACRIS, County Assessors | Sale prices, buyer LLCs, property types |
-| 🛡️ **Threat Intelligence** | Pastebin, Indexed Dumps | Leaked emails, breach names, source URLs |
-| 🌐 **Infrastructure Mapping** | Indexed Subdomains | Staging servers, APIs, tech stacks |
-| 📄 **Deep PDF Parsing** | DARPA Budgets, Gov PDFs | Line items, dollar amounts from 4000-page PDFs |
-| 💎 **Crypto De-Anonymization** | BitcoinTalk, Forums | Wallet-to-username correlations |
-| 📡 **IoT/Firmware Recon** | Indexed Router Logs | Firmware versions, internal subnets |
+Stop guessing what domains we support. Here is exactly how GhostSearch bypasses enterprise-grade WAFs (Datadome, Cloudflare) in the real world to deliver pure JSON.
+
+#### Use Case 1: Bypassing PitchBook (Datadome WAF)
+PitchBook actively blocks 99% of scraping attempts. We use SGE to fetch the indexed profile of Databricks and structure it instantly.
+
+**The GhostSearch Prompt:**
+```text
+You are a Quantitative Financial Modeler. Locate the publicly indexed profile for Databricks on pitchbook.com. Parse the indexed text and reconstruct it into a valid JSON object. 
+Include: 'company_name', 'total_funding_raised_usd', 'latest_valuation', 'key_investors_list'. 
+The output MUST be pure, valid JSON starting with '{' and ending with '}'. Do NOT include markdown.
+```
+
+**The Output (Bypassed & Structured):**
+```json
+{
+  "company_name": "Databricks",
+  "total_funding_raised_usd": 4000000000,
+  "latest_valuation": 43000000000,
+  "key_investors_list": ["Andreessen Horowitz", "Tiger Global", "Morgan Stanley", "T. Rowe Price"]
+}
+```
+
+#### Use Case 2: Extracting Medical Provider Info from WebMD (Cloudflare Turnstile)
+Healthcare directories heavily guard their physician data. SGE proxies the read and gives us clean JSON.
+
+**The GhostSearch Prompt:**
+```text
+Locate Dr. John Smith, Cardiologist in New York, on WebMD. Extract his contact info and specialties into a strict JSON format containing 'name', 'specialty', 'phone_number', and 'address'. Output only the JSON.
+```
+
+**The Output:**
+```json
+{
+  "name": "Dr. John Smith",
+  "specialty": "Cardiology",
+  "phone_number": "555-019-8372",
+  "address": "123 Heart Ave, New York, NY 10001"
+}
+```
+
+### 🛡️ Why This Exploit is "Unpatchable"
+Sites running expensive WAFs (Datadome, Kasada) have a fundamental dilemma: **They must whitelist Googlebot to rank on Google.** 
+By forcing SGE to query its own index and format the output, you never actually send an HTTP request to the target server. The target server cannot block this without de-indexing their own website from Google Search entirely. 
 
 ### GhostSearch Quick Start
 
@@ -273,6 +299,23 @@ When started with `./ultrasearch -serve -port 8082`, the server exposes a single
   ]
 }
 ```
+
+---
+
+
+## ❓ Frequently Asked Questions (FAQ)
+
+**Q: Is GhostSearch scraping legal?**  
+A: GhostSearch does not scrape the target website. It queries Google Search (SGE) and asks it to synthesize information it has already indexed. You are simply asking an AI a question.
+
+**Q: Do I need a proxy pool for this to work?**  
+A: No! Because we are querying Google, your local IP or a single basic VPN is often enough. We handle the session management and cookie rotation internally to avoid Google's rate limits.
+
+**Q: Can this extract data from sites requiring a login?**  
+A: If the data is hidden behind a hard login wall and Googlebot cannot index it, GhostSearch cannot see it. However, many sites (like PitchBook or ZoomInfo) use "soft paywalls" where they allow Googlebot to index the page for SEO, but block actual users. GhostSearch easily extracts this data!
+
+**Q: Why does the output sometimes vary?**  
+A: SGE is a generative model. While our prompts force it into strict JSON, the actual values might fluctuate slightly depending on Google's index caching. We recommend running extraction in batches and validating the schemas.
 
 ---
 
