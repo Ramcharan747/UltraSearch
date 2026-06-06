@@ -189,9 +189,20 @@ var LocateJS = `(() => {
 		}
 	}
 	
+	// Brave Search challenge verify button
+	const verifyBtns = Array.from(document.querySelectorAll('button'));
+	for (const btn of verifyBtns) {
+		if (btn.innerText && btn.innerText.toLowerCase().includes('verify')) {
+			const r = btn.getBoundingClientRect();
+			if (r.width > 0 && r.height > 0) {
+				return { type: 'brave_verify', cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+			}
+		}
+	}
+	
 	// DataDome or generic challenge fallback
 	const bodyText = document.body ? document.body.innerText.toLowerCase() : '';
-	if (bodyText.includes('verify you are human') || bodyText.includes('datadome') || bodyText.includes('security check') || bodyText.includes('just a moment')) {
+	if (bodyText.includes('verify you are human') || bodyText.includes('datadome') || bodyText.includes('security check') || bodyText.includes('just a moment') || bodyText.includes('verifying you\\'re not a bot')) {
 		return { type: 'telemetry_only', cx: window.innerWidth / 2, cy: window.innerHeight / 2 };
 	}
 	return null;
@@ -215,46 +226,33 @@ func LocateCaptchaCoordinates(ctx context.Context) (*CaptchaCoords, error) {
 
 // DefeatCaptcha orchestrates the entire process in Go
 func DefeatCaptcha(ctx context.Context, currentX, currentY float64) (bool, error) {
-	log.Println("🔍 [Solver] Scanning DOM for CAPTCHA...")
+	log.Println("🔍 [Solver] DefeatCaptcha: Skipping CAPTCHA solving as requested (solver disabled).")
+	return false, fmt.Errorf("captcha detected but solver is disabled")
+}
+
+// DefeatBraveChallenge uses the trajectory pool to click the Brave verify button
+func DefeatBraveChallenge(ctx context.Context, currentX, currentY float64) (bool, error) {
 	coords, err := LocateCaptchaCoordinates(ctx)
-	if err != nil || coords == nil {
-		log.Println("❌ [Solver] Could not locate CAPTCHA.")
-		return false, err
-	}
-	
-	log.Printf("🎯 [Solver] Target: %s at (%.0f, %.0f)", coords.Type, coords.CX, coords.CY)
-	path := GetInstantPath(currentX, currentY, coords.CX, coords.CY)
-	
-	log.Printf("🖱️  [Solver] Strike: (%.0f,%.0f) → (%.0f,%.0f)", currentX, currentY, coords.CX, coords.CY)
-	totalMs := rand.Intn(300) + 400 // 400ms - 700ms
-	if err := ExecuteHumanPath(ctx, path, totalMs); err != nil {
-		return false, err
-	}
-	
-	if coords.Type == "telemetry_only" {
-		log.Println("🤖 [Solver] Performing telemetry injection (scroll & hover)...")
-		chromedp.Run(ctx, chromedp.Evaluate(`window.scrollBy(0, 300)`, nil))
-		time.Sleep(2 * time.Second)
-		return true, nil
+	if err != nil || coords == nil || coords.Type != "brave_verify" {
+		return false, fmt.Errorf("brave verify button not found: %v", err)
 	}
 
-	time.Sleep(time.Duration(rand.Float64()*170+80) * time.Millisecond) // 80ms - 250ms
-	
-	log.Println("👆 [Solver] Click!")
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
-		p1 := input.DispatchMouseEvent(input.MousePressed, coords.CX, coords.CY).WithButton("left").WithClickCount(1)
-		if err := p1.Do(c); err != nil {
-			return err
-		}
-		time.Sleep(time.Duration(rand.Intn(40)+80) * time.Millisecond) // 80-120ms
-		p2 := input.DispatchMouseEvent(input.MouseReleased, coords.CX, coords.CY).WithButton("left").WithClickCount(1)
-		return p2.Do(c)
-	}))
+	log.Printf("🦁 [Solver] Found Brave Verify Button at (%.1f, %.1f). Solving...", coords.CX, coords.CY)
+
+	// Move mouse there using realistic trajectories
+	path := GetInstantPath(currentX, currentY, coords.CX, coords.CY)
+	err = ExecuteHumanPath(ctx, path, 800+rand.Intn(400))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to move mouse: %v", err)
 	}
-	
-	// Wait a moment for the challenge to resolve
-	time.Sleep(3 * time.Second)
+
+	// Click it
+	err = chromedp.Run(ctx, input.DispatchMouseEvent(input.MousePressed, coords.CX, coords.CY).WithButton(input.Left))
+	if err != nil { return false, err }
+	time.Sleep(time.Duration(50+rand.Intn(50)) * time.Millisecond)
+	err = chromedp.Run(ctx, input.DispatchMouseEvent(input.MouseReleased, coords.CX, coords.CY).WithButton(input.Left))
+	if err != nil { return false, err }
+
+	log.Println("✅ [Solver] Clicked Brave Verify Button.")
 	return true, nil
 }

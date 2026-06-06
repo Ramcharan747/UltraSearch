@@ -43,7 +43,7 @@ function ULTRA_SEARCH(query, invocation) {
     try {
       const cacheKey = "us_cache_" + query.toLowerCase().trim();
       let cachedVal = null;
-      let apiUrl = "https://april-aorta-sandal.ngrok-free.dev";
+      let apiUrl = "http://localhost:8050";
 
       if (typeof OfficeRuntime !== 'undefined' && OfficeRuntime.storage) {
         try {

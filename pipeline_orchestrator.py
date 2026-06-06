@@ -55,80 +55,105 @@ def run_pipeline(shard_index, total_shards, limit=None, query_size=None, domain=
     conn = init_db()
     c = conn.cursor()
     
-    # Select pending queries for this shard
-    query = "SELECT id, query_id, query_text FROM queries WHERE status = 'PENDING' AND (id % ?) = ?"
-    params = [total_shards, shard_index]
-    
-    if query_size:
-        query += " AND query_size = ?"
-        params.append(query_size)
+    # Loop for retry passes
+    max_passes = 3
+    for pass_num in range(1, max_passes + 1):
+        # Select pending queries for this shard
+        query = "SELECT id, query_id, query_text FROM queries WHERE status = 'PENDING' AND (id % ?) = ?"
+        params = [total_shards, shard_index]
         
-    if domain:
-        query += " AND domain = ?"
-        params.append(domain)
-        
-    query += " ORDER BY id ASC"
-    c.execute(query, params)
-    
-    pending = c.fetchall()
-    
-    if limit:
-        pending = pending[:limit]
-        
-    print(f"Shard {shard_index}/{total_shards} has {len(pending)} pending queries.")
-    
-    for row in pending:
-        db_id, query_id, query_text = row
-        print(f"Executing [{query_id}]: {query_text[:50]}...")
-        
-        url = f"{API_URL}?q={quote_plus(query_text)}&limit=5&ai_mode=only"
-        
-        success = False
-        response_data = None
-        error_msg = None
-        
-        # Simple retry logic
-        for attempt in range(3):
-            try:
-                resp = requests.get(url, timeout=180)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results = data.get("results", [])
-                    if results and len(results) > 0 and results[0].get("rank") == 0:
-                        response_data = results[0].get("snippet")
-                        success = True
-                        break
-                    elif data.get("error"):
-                        error_msg = data.get("error")
-                        if error_msg in ["blocked_by_captcha", "timeout waiting for page load and settle"]:
-                            print(f"  -> Transient error '{error_msg}' on attempt {attempt+1}. Retrying...")
-                            time.sleep(5)
-                            continue
-                        break # Don't retry logic errors immediately
-                    else:
-                        error_msg = "No AI Overview generated (or refused)."
-                        break
-                else:
-                    error_msg = f"HTTP {resp.status_code}: {resp.text}"
-            except Exception as e:
-                error_msg = str(e)
-                time.sleep(2 * (attempt + 1)) # Backoff
-        
-        if success:
-            c.execute('''
-                UPDATE queries SET status = 'SUCCESS', response_json = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (response_data, db_id))
-            print("  -> SUCCESS")
-        else:
-            c.execute('''
-                UPDATE queries SET status = 'FAILED', error_msg = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (error_msg, db_id))
-            print(f"  -> FAILED: {error_msg}")
+        if query_size:
+            query += " AND query_size = ?"
+            params.append(query_size)
             
-        conn.commit()
-        time.sleep(1) # Rate limit protection between queries
+        if domain:
+            query += " AND domain = ?"
+            params.append(domain)
+            
+        query += " ORDER BY id ASC"
+        c.execute(query, params)
+        
+        pending = c.fetchall()
+        
+        if limit:
+            pending = pending[:limit]
+            
+        if len(pending) == 0:
+            # Check if there are failed queries to retry in the next pass
+            if pass_num < max_passes:
+                c.execute("SELECT COUNT(*) FROM queries WHERE status = 'FAILED' AND domain = ?", (domain,))
+                failed_count = c.fetchone()[0]
+                if failed_count > 0:
+                    print(f"🔄 Pass {pass_num} complete. Found {failed_count} FAILED queries. Resetting them to PENDING for Retry Pass {pass_num + 1}...")
+                    c.execute("UPDATE queries SET status = 'PENDING', error_msg = NULL WHERE status = 'FAILED' AND domain = ?", (domain,))
+                    conn.commit()
+                    continue
+            break
+            
+        print(f"Shard {shard_index}/{total_shards} has {len(pending)} pending queries (Pass {pass_num}/{max_passes}).")
+        
+        for row in pending:
+            db_id, query_id, query_text = row
+            print(f"Executing [{query_id}]: {query_text[:50]}...")
+        
+            url = f"{API_URL}?q={quote_plus(query_text)}&limit=5&ai_mode=only"
+            
+            success = False
+            response_data = None
+            error_msg = None
+            
+            # Simple retry logic
+            for attempt in range(3):
+                try:
+                    resp = requests.get(url, timeout=180)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        results = data.get("results", [])
+                        if results and len(results) > 0 and results[0].get("rank") == 0:
+                            response_data = results[0].get("snippet")
+                            success = True
+                            break
+                        elif data.get("error"):
+                            error_msg = data.get("error")
+                            if error_msg in ["blocked_by_captcha", "timeout waiting for page load and settle"]:
+                                print(f"  -> Transient error '{error_msg}' on attempt {attempt+1}. Retrying...")
+                                time.sleep(5)
+                                continue
+                            break # Don't retry logic errors immediately
+                        else:
+                            error_msg = "No AI Overview generated (or refused)."
+                            break
+                    else:
+                        error_msg = f"HTTP {resp.status_code}: {resp.text}"
+                except Exception as e:
+                    error_msg = str(e)
+                    time.sleep(2 * (attempt + 1)) # Backoff
+            
+            if success:
+                c.execute('''
+                    UPDATE queries SET status = 'SUCCESS', response_json = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (response_data, db_id))
+                print("  -> SUCCESS")
+            else:
+                c.execute('''
+                    UPDATE queries SET status = 'FAILED', error_msg = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (error_msg, db_id))
+                print(f"  -> FAILED: {error_msg}")
+                
+            conn.commit()
+            
+            # --- SUDDEN LARGE BREAKS (Human Behavior Emulation) ---
+            import random
+            if random.random() < 0.06:
+                breaks = [5 * 60, 10 * 60, 15 * 60, 20 * 60, 30 * 60, 45 * 60, 60 * 60] # seconds
+                break_dur = random.choice(breaks)
+                print(f"   💤 Emulating human break, sleeping for {break_dur // 60} minutes...")
+                time.sleep(break_dur)
+                print("   ⏰ Woke up from break! Resuming queries...")
+            else:
+                time.sleep(1) # Rate limit protection between queries
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
