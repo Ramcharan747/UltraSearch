@@ -53,8 +53,9 @@ goalPromptInput.value = DEFAULT_GOAL;
 // Initialize Application
 async function initApp() {
   let savedUrl = localStorage.getItem("ULTRA_SEARCH_API_URL");
-  if (!savedUrl || savedUrl.startsWith("http://localhost") || savedUrl.startsWith("http://127.0.0.1") || !savedUrl.includes("trycloudflare") || savedUrl.includes("proc-rolling-kent-commercial")) {
-    savedUrl = "https://april-aorta-sandal.ngrok-free.dev";
+  const currentOrigin = window.location.origin || "http://localhost:8050";
+  if (!savedUrl || savedUrl.includes("april-aorta-sandal.ngrok-free.dev") || savedUrl.includes("proc-rolling-kent-commercial")) {
+    savedUrl = currentOrigin;
     localStorage.setItem("ULTRA_SEARCH_API_URL", savedUrl);
   }
 
@@ -679,7 +680,7 @@ function logDebug(message) {
 let lastConnectionLog = 0; // throttle debug logs
 async function checkServerConnection() {
   const configuredUrl = serverUrlInput.value.trim();
-  const urls = [configuredUrl, "http://localhost:8082"].filter(Boolean);
+  const urls = [configuredUrl, window.location.origin, "http://localhost:8050", "http://localhost:8082"].filter(Boolean);
   const shouldLog = Date.now() - lastConnectionLog > 30000; // log every 30s max
   
   for (const baseUrl of urls) {
@@ -1075,7 +1076,7 @@ async function runSingleRowDirect(rowIndex, queryText, UIItem, colValues) {
     }
   }
 
-  const baseUrl = serverUrlInput.value.trim() || "http://localhost:8082";
+  const baseUrl = serverUrlInput.value.trim() || window.location.origin || "http://localhost:8050";
   
   // Step 2: Start 4-state Searching Animation
   logDebug(`Row ${rowIndex + 1}: Searching...`);
@@ -1100,7 +1101,8 @@ async function runSingleRowDirect(rowIndex, queryText, UIItem, colValues) {
   }
   
   const aiSearchMode = document.querySelector('input[name="ai-search-mode"]:checked')?.value || "none";
-  logDebug(`Row ${rowIndex + 1}: ai_mode=${aiSearchMode}`);
+  const searchEngine = document.querySelector('input[name="search-engine-provider"]:checked')?.value || "google";
+  logDebug(`Row ${rowIndex + 1}: ai_mode=${aiSearchMode}, engine=${searchEngine}`);
   let rephrasedQuery = "";
   if (aiSearchMode === "none") {
     // HTTP mode: build a concise Google-friendly query instead of sending the whole system prompt
@@ -1125,7 +1127,7 @@ async function runSingleRowDirect(rowIndex, queryText, UIItem, colValues) {
       rephrasedQuery = `${queryText} (format answer as a JSON object)`;
     }
   }
-  const url = `${baseUrl}/search?q=${encodeURIComponent(rephrasedQuery)}&limit=5&ai_mode=${aiSearchMode}`;
+  const url = `${baseUrl}/search?q=${encodeURIComponent(rephrasedQuery)}&limit=5&ai_mode=${aiSearchMode}&engine=${searchEngine}`;
   
   let success = false;
   let parsedData = null;
@@ -1208,9 +1210,11 @@ async function runSingleRowDirect(rowIndex, queryText, UIItem, colValues) {
     logDebug(`Row ${rowIndex + 1}: SUCCESS. Writing results back to spreadsheet.`);
     
     const cacheKey = "us_cache_" + queryText.toLowerCase().trim();
-    const rawVal = parsedData.raw_overview || JSON.stringify(parsedData);
-    localStorage.setItem(cacheKey, rawVal);
+    // Cache the FULL parsedData object as stringified JSON so we can restore it perfectly next time!
+    localStorage.setItem(cacheKey, JSON.stringify(parsedData));
     
+    // Save raw_overview in a local variable before deleting it from parsedData
+    const rawOverviewBackup = parsedData.raw_overview;
     delete parsedData.raw_overview;
     
     if (mappings.length > 0) {
@@ -1230,7 +1234,7 @@ async function runSingleRowDirect(rowIndex, queryText, UIItem, colValues) {
           }
           if (val === undefined || val === null) {
             // Fallback: if no JSON key matched, use the raw snippet/result text
-            val = parsedData.result || parsedData.raw_overview || "";
+            val = parsedData.result || rawOverviewBackup || "";
             if (val) {
               logDebug(`Row ${rowIndex + 1}: No exact JSON key match for "${m.fieldName}". Using organic snippet as fallback.`);
             }
@@ -1251,6 +1255,10 @@ async function runSingleRowDirect(rowIndex, queryText, UIItem, colValues) {
       }
     } else {
       // Excel formula safety sanitation
+      // If parsedData has no other parsed JSON keys, restore raw overview backup under 'result'
+      if (Object.keys(parsedData).length === 0 && rawOverviewBackup) {
+        parsedData.result = rawOverviewBackup;
+      }
       const keys = Object.keys(parsedData);
       const values = keys.map(k => {
         let val = parsedData[k];
@@ -1322,7 +1330,7 @@ async function runSingleMode(rows) {
 // 2. Batched Mode Execution (Combines 2-5 rows in one query)
 async function runBatchMode(rows, batchSize) {
   const goal = goalPromptInput.value.trim();
-  const baseUrl = serverUrlInput.value.trim() || "http://localhost:8082";
+  const baseUrl = serverUrlInput.value.trim() || window.location.origin || "http://localhost:8050";
   
   // Extract backslash column mappings BEFORE variable replacements
   const mappingRegex = /\{\{\s*([^}]+?)\s*\}\}\\([a-zA-Z0-9_\-]+)/g;
@@ -1380,6 +1388,7 @@ async function runBatchMode(rows, batchSize) {
     const entitiesList = batch.map((r, index) => `${index + 1}. "${r.query}"`).join('\n');
     
     const aiSearchMode = document.querySelector('input[name="ai-search-mode"]:checked')?.value || "none";
+    const searchEngine = document.querySelector('input[name="search-engine-provider"]:checked')?.value || "google";
     let batchedQuery = "";
     if (aiSearchMode === "none") {
       // For HTTP search, keep the query extremely clean and short to prevent search failures
@@ -1422,7 +1431,7 @@ async function runBatchMode(rows, batchSize) {
       startStatusAnimation(row.index, "🔍 Searching");
     });
     
-    const url = `${baseUrl}/search?q=${encodeURIComponent(batchedQuery)}&limit=5&ai_mode=${aiSearchMode}`;
+    const url = `${baseUrl}/search?q=${encodeURIComponent(batchedQuery)}&limit=5&ai_mode=${aiSearchMode}&engine=${searchEngine}`;
     
     let success = false;
     let parsedArray = null;

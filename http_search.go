@@ -332,7 +332,7 @@ func getHTTPClient() *http.Client {
 	return httpClient
 }
 
-func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchResult, error) {
+func runHTTPSearch(q string, maxResults int, filters SearchFilters, engineName string) ([]SearchResult, error) {
 	// Wait up to 3 seconds for a session to become available
 	session, err := poolManager.GetSessionOrWait(3 * time.Second)
 	if err != nil {
@@ -340,7 +340,8 @@ func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchRes
 	}
 
 	client := getHTTPClient()
-	searchURL := BuildSearchURL(q, maxResults+10, filters)
+	engine := GetEngine(engineName)
+	searchURL := engine.BuildSearchURL(q, maxResults+10, filters)
 
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
@@ -421,106 +422,148 @@ func runHTTPSearch(q string, maxResults int, filters SearchFilters) ([]SearchRes
 
 	var out []SearchResult
 
-	// 1. Parse SGE (Google AI Overview)
-	aiContainer := doc.Find(".s7d4ef")
-	if aiContainer.Length() > 0 {
-		var aiText string
-		paragraphs := aiContainer.Find("div.n6owBd")
-		if paragraphs.Length() > 0 {
-			paragraphs.Each(func(i int, s *goquery.Selection) {
-				aiText += s.Text() + " "
-			})
-		} else {
-			aiText = aiContainer.Text()
-		}
-		aiText = strings.TrimSpace(strings.ReplaceAll(aiText, "\n", " "))
-		
-		lowerText := strings.ToLower(aiText)
-		isErrorText := strings.Contains(lowerText, "not available for this search") || 
-			strings.Contains(lowerText, "can't generate") || 
-			strings.Contains(lowerText, "try again later")
-			
-		if len(aiText) > 30 && !isErrorText {
-			if len(aiText) > 3000 {
-				aiText = aiText[:3000]
+	if engineName == "google" {
+		// 1. Parse SGE (Google AI Overview)
+		aiContainer := doc.Find(".s7d4ef")
+		if aiContainer.Length() > 0 {
+			var aiText string
+			paragraphs := aiContainer.Find("div.n6owBd")
+			if paragraphs.Length() > 0 {
+				paragraphs.Each(func(i int, s *goquery.Selection) {
+					aiText += s.Text() + " "
+				})
+			} else {
+				aiText = aiContainer.Text()
 			}
+			aiText = strings.TrimSpace(strings.ReplaceAll(aiText, "\n", " "))
+			
+			lowerText := strings.ToLower(aiText)
+			isErrorText := strings.Contains(lowerText, "not available for this search") || 
+				strings.Contains(lowerText, "can't generate") || 
+				strings.Contains(lowerText, "try again later")
+				
+			if len(aiText) > 30 && !isErrorText {
+				if len(aiText) > 3000 {
+					aiText = aiText[:3000]
+				}
+				out = append(out, SearchResult{
+					Rank:    0,
+					Title:   "✨ Google AI Overview",
+					URL:     searchURL,
+					Snippet: aiText,
+				})
+			}
+		}
+
+		// 2. Parse organic results
+		doc.Find("a h3").Each(func(i int, s *goquery.Selection) {
+			if len(out) >= maxResults {
+				return
+			}
+			a := s.Closest("a")
+			if a.Length() == 0 {
+				return
+			}
+			href, exists := a.Attr("href")
+			if !exists || strings.Contains(href, "google.com") {
+				return
+			}
+
+			title := s.Text()
+			snippet := ""
+
+			// Find closest snippet container
+			parent := a.Closest("[data-sokoban-container]")
+			if parent.Length() == 0 {
+				parent = a.Closest(".g")
+			}
+			if parent.Length() == 0 {
+				parent = a.Parent().Parent().Parent()
+			}
+
+			if parent.Length() > 0 {
+				var maxLen int
+				parent.Find("div, span").Each(func(j int, child *goquery.Selection) {
+					text := strings.TrimSpace(strings.ReplaceAll(child.Text(), "\n", " "))
+					if len(text) > maxLen && text != title && !strings.Contains(text, "›") && child.Find("h3").Length() == 0 {
+						maxLen = len(text)
+						snippet = text
+					}
+				})
+			}
+
+			if len(snippet) > 1000 {
+				snippet = snippet[:1000]
+			}
+
 			out = append(out, SearchResult{
-				Rank:    0,
-				Title:   "✨ Google AI Overview",
-				URL:     searchURL,
-				Snippet: aiText,
+				Rank:    len(out) + 1,
+				Title:   title,
+				URL:     href,
+				Snippet: snippet,
 			})
-		}
-	}
-
-	// 2. Parse organic results
-	doc.Find("a h3").Each(func(i int, s *goquery.Selection) {
-		if len(out) >= maxResults {
-			return
-		}
-		a := s.Closest("a")
-		if a.Length() == 0 {
-			return
-		}
-		href, exists := a.Attr("href")
-		if !exists || strings.Contains(href, "google.com") {
-			return
-		}
-
-		title := s.Text()
-		snippet := ""
-
-		// Find closest snippet container
-		parent := a.Closest("[data-sokoban-container]")
-		if parent.Length() == 0 {
-			parent = a.Closest(".g")
-		}
-		if parent.Length() == 0 {
-			parent = a.Parent().Parent().Parent()
-		}
-
-		if parent.Length() > 0 {
-			var maxLen int
-			parent.Find("div, span").Each(func(j int, child *goquery.Selection) {
-				text := strings.TrimSpace(strings.ReplaceAll(child.Text(), "\n", " "))
-				if len(text) > maxLen && text != title && !strings.Contains(text, "›") && child.Find("h3").Length() == 0 {
-					maxLen = len(text)
-					snippet = text
-				}
-			})
-		}
-
-		if len(snippet) > 1000 {
-			snippet = snippet[:1000]
-		}
-
-		out = append(out, SearchResult{
-			Rank:    len(out) + 1,
-			Title:   title,
-			URL:     href,
-			Snippet: snippet,
 		})
-	})
 
-	// Run Vortex Output Immunizer on SGE parsed outputs
-	for i, r := range out {
-		if r.Rank == 0 {
-			var sgeSources []string
-			for _, organicRes := range out {
-				if organicRes.Rank > 0 {
-					sgeSources = append(sgeSources, organicRes.URL)
+		// Run Vortex Output Immunizer on SGE parsed outputs
+		for i, r := range out {
+			if r.Rank == 0 {
+				var sgeSources []string
+				for _, organicRes := range out {
+					if organicRes.Rank > 0 {
+						sgeSources = append(sgeSources, organicRes.URL)
+					}
+				}
+				
+				log.Printf("🛡️ [Vortex] Sanitizing HTTP Google AI Overview output via Go Security Gateway...")
+				startTime := time.Now()
+				_, verdict := globalImmunizer.ProcessSGEResponse(q, r.Snippet, sgeSources, int(time.Since(startTime).Milliseconds()))
+				log.Printf("🛡️ [Vortex] Sanitization complete. Verdict: %s", verdict)
+				
+				if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" && verdict != "NO_JSON_FOUND" && verdict != "PARSING_ERROR" {
+					out[i].Snippet = fmt.Sprintf("⚠️ [Vortex Security Alert] Indirect Prompt Injection Attack Neutralized.\nVerdict: %s", verdict)
 				}
 			}
-			
-			log.Printf("🛡️ [Vortex] Sanitizing HTTP Google AI Overview output via Go Security Gateway...")
-			startTime := time.Now()
-			_, verdict := globalImmunizer.ProcessSGEResponse(q, r.Snippet, sgeSources, int(time.Since(startTime).Milliseconds()))
-			log.Printf("🛡️ [Vortex] Sanitization complete. Verdict: %s", verdict)
-			
-			if verdict != "SAFE" && verdict != "BYPASSED_TRUSTED" && verdict != "NO_JSON_FOUND" && verdict != "PARSING_ERROR" {
-				out[i].Snippet = fmt.Sprintf("⚠️ [Vortex Security Alert] Indirect Prompt Injection Attack Neutralized.\nVerdict: %s", verdict)
-			}
 		}
+	} else if engineName == "brave" {
+		// Brave HTTP Parsing
+		doc.Find("#results .snippet").Each(func(i int, s *goquery.Selection) {
+			if len(out) >= maxResults {
+				return
+			}
+			linkSel := s.Find(".snippet-title a, .result-header a")
+			href, _ := linkSel.Attr("href")
+			title := linkSel.Text()
+			snippet := s.Find(".snippet-description, .snippet-content").Text()
+			
+			if href != "" && title != "" {
+				out = append(out, SearchResult{
+					Rank:    len(out) + 1,
+					Title:   strings.TrimSpace(title),
+					URL:     strings.TrimSpace(href),
+					Snippet: strings.TrimSpace(snippet),
+				})
+			}
+		})
+	} else if engineName == "bing" {
+		// Bing HTTP Parsing
+		doc.Find("#b_results .b_algo").Each(func(i int, s *goquery.Selection) {
+			if len(out) >= maxResults {
+				return
+			}
+			linkSel := s.Find("h2 a")
+			href, _ := linkSel.Attr("href")
+			title := linkSel.Text()
+			snippet := s.Find(".b_caption p, .b_lineclamp").Text()
+			
+			if href != "" && title != "" {
+				out = append(out, SearchResult{
+					Rank:    len(out) + 1,
+					Title:   strings.TrimSpace(title),
+					URL:     strings.TrimSpace(href),
+					Snippet: strings.TrimSpace(snippet),
+				})
+			}
+		})
 	}
 
 	return out, nil

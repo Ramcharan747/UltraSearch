@@ -27,6 +27,7 @@ function getFilterFlags() {
     const uule = config.get('uule', '');
     const safe = config.get('safe', '');
     const tbs = config.get('tbs', '');
+    const engine = config.get('engine', 'google');
 
     let flags = '';
     if (profile && profile !== 'browser') {
@@ -46,6 +47,9 @@ function getFilterFlags() {
     }
     if (tbs) {
         flags += ` -tbs "${tbs}"`;
+    }
+    if (engine && engine !== 'google') {
+        flags += ` -engine "${engine}"`;
     }
     return flags;
 }
