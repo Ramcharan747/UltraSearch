@@ -60,9 +60,9 @@ graph TD
 
 UltraSearch is designed to bring intelligence to where your data lives, integrating silently into your existing tools:
 
-*   **Excel & Google Sheets:** Automatically infers research context from column headers and populates rows with structured company data, valuations, and academic references, complete with color-coded confidence indicators.
-*   **VS Code & Cursor IDE:** Operates as a local **Model Context Protocol (MCP)** server, allowing coding assistants to query API schemas, company records, or technical documentations directly into your workspace.
-*   **Command Line Interface (CLI):** Optimized Go binary for high-speed terminal queries, batch file processing, and custom schemas.
+*   **Excel & Google Sheets:** Automatically infers research context from column headers and populates rows with structured company data. Includes built-in multi-engine toggling (Google, Brave, Bing) inside the sidebar UI.
+*   **VS Code & Cursor IDE:** Operates as a local **Model Context Protocol (MCP)** server, allowing coding assistants to query API schemas directly into your workspace. Multi-engine support configured seamlessly via `ultrasearch.engine` setting.
+*   **Command Line Interface (CLI):** Optimized Go binary for high-speed terminal queries, batch file processing, and custom schemas. Supports on-the-fly engine swapping via `-engine`.
 *   **Developer REST API:** A robust HTTP server offering OpenAPI-compliant endpoints for easy integration into enterprise ETL pipelines.
 
 ---
@@ -157,6 +157,7 @@ UltraSearch can be run in single-query mode, batch-processing mode, or as a back
 
 | Flag | Default | Description |
 | :--- | :--- | :--- |
+| `-engine` | `"google"` | Search engine(s) to use: `google`, `brave`, `bing`. |
 | `-query` | `""` | A single search query or structured prompt to execute. |
 | `-bundle` | `""` | Path to a text file containing queries (one per line) for batch execution. |
 | `-limit` | `10` | Maximum number of search results to process per query. |
@@ -177,11 +178,12 @@ UltraSearch can be run in single-query mode, batch-processing mode, or as a back
 When running in server mode (`./ultrasearch -serve -port 8082`), the server exposes a standardized QFP-compatible endpoint:
 
 ### Ingest Search Request
-`GET http://localhost:8082/search?q=<query>&limit=<limit>&ai_mode=<mode>&content=<bool>`
+`GET http://localhost:8082/search?q=<query>&limit=<limit>&ai_mode=<mode>&engine=<engine>&content=<bool>`
 
 *   `q` (string, required): The search string or structured prompt.
 *   `limit` (int, optional, default: 5): Max search results to process.
 *   `ai_mode` (string, optional, default: `none`): Set to `none` (organic HTTP), `only` (generative AI), or `both` (AI + organic).
+*   `engine` (string, optional, default: `google`): Choose between `google`, `brave`, and `bing`.
 *   `content` (bool, optional, default: `true` for organic): Crawl page body.
 
 ### JSON Response Format (`application/json`)
