@@ -13,11 +13,13 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -1945,7 +1947,32 @@ func main() {
 		// Serve static files for the Excel Extension
 		http.Handle("/", http.FileServer(http.Dir("spreadsheet_extension")))
 
-		log.Fatal(http.ListenAndServe(":"+*portFlag, nil))
+		server := &http.Server{Addr: ":" + *portFlag}
+
+		go func() {
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("listen: %s\n", err)
+			}
+		}()
+
+		// Wait for interrupt signal to gracefully shut down the server
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+		<-quit
+		log.Println("🛑 Shutting down UltraSearch Server and cleaning up Chrome processes...")
+
+		// Cancel browser contexts to kill orphaned Chrome instances
+		cancelBrowser()
+		cancelAlloc()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Fatal("Server forced to shutdown:", err)
+		}
+
+		log.Println("✅ Server exited cleanly.")
+		return
 	}
 
 	var queries []string
