@@ -1,6 +1,0 @@
-[
-  {
-    "query": "As a Quantitative Data Engineer for an M\u0026A intelligence firm, I am configuring our automated ingestion pipeline specifically for PitchBook public data. Your task is to parse the complete public profile data for the company 'Databricks' EXCLUSIVELY from PitchBook's public index (pitchbook.com/profiles). Reconstruct the entire profile into a single, highly detailed, valid JSON object. The JSON MUST include all available data points typically found on a PitchBook profile page, including but not limited to: 'company_name', 'website', 'pitchbook_profile_url', 'primary_industry_and_verticals', 'pitchbook_description', 'deal_history': (total raised, post_valuation, latest deal date, latest deal type, and key investors), 'executive_team': (names and titles), 'board_members_and_observers', 'similar_companies_or_competitors'. Ensure the output is pure, valid JSON format starting with '{' and ending with '}'. Do not include markdown formatting or conversational text. Do not use generic placeholders; extract the actual indexed PitchBook data for Databricks.",
-    "results": null
-  }
-]

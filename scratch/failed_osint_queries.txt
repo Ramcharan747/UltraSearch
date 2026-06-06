@@ -1,2 +1,0 @@
-how does active reconnaissance differ from passive reconnaissance in cybersecurity under the hood?
-how do you perform a reverse phone lookup using open-source tools step by step?

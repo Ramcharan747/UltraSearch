@@ -1,8 +1,0 @@
-what are the best ways to find the owner of an email address using open source tools step by step?
-how does active reconnaissance differ from passive reconnaissance in cybersecurity under the hood?
-compare maltego vs spiderfoot for target footprinting and domain mapping under the hood
-how can you trace the physical location of an IP address using open source intelligence tools?
-explain in detail how to find all social media profiles associated with a username across multiple platforms step by step
-what is the current US legal consensus and court cases regarding web scraping public data?
-how do you perform a reverse phone lookup using open-source tools step by step?
-explain in detail how to bypass Cloudflare Turnstile using puppeteer stealth under the hood

@@ -17,3 +17,4 @@ usage_telemetry.jsonl
 *.tmp
 ultra_results.json
 *_formatted.txt
+scratch/
