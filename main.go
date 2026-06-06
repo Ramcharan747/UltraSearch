@@ -513,7 +513,7 @@ func init() {
 	}
 	filterManager = NewFilterProfileManager("filters.json")
 	ReplenishCallback = func() {
-		ReplenishSessionPool(5)
+		ReplenishSessionPool(1)
 	}
 	globalImmunizer = NewVortexImmunizer()
 }
@@ -1601,9 +1601,9 @@ func main() {
 	resolvedFilters = filterManager.Resolve(resolvedFilters)
 
 	// Proactively pre-fill the session pool at startup if we have fewer than 5 active sessions
-	if poolManager.ActiveCount() < 5 {
+	if poolManager.ActiveCount() < 1 {
 		log.Println("🔑 [Session Pool] Startup pool count low. Pre-filling session pool...")
-		ReplenishSessionPool(5)
+		ReplenishSessionPool(1)
 	}
 
 	if *stressFlag {
