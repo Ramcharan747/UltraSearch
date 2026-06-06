@@ -49,6 +49,7 @@ sleep 1
 # ── 2. Start Go Server (Hosts API & Static Files on 8082) ───────────────────
 info "Starting Go server on port 8082..."
 cd "$ROOT_DIR"
+go build -o ultrasearch ./cmd/ultrasearch
 ./ultrasearch -serve -port 8082 -workers 5 -headless=false > /tmp/ultrasearch_api.log 2>&1 &
 API_PID=$!
 sleep 2
