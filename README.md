@@ -58,44 +58,7 @@ sequenceDiagram
 
 Stop guessing what domains we support. Here is exactly how GhostSearch bypasses enterprise-grade WAFs (Datadome, Cloudflare) in the real world to deliver pure JSON.
 
-#### Use Case 1: Bypassing PitchBook (Datadome WAF)
-PitchBook actively blocks 99% of scraping attempts. We use SGE to fetch the indexed profile of Databricks and structure it instantly.
-
-**The GhostSearch Prompt:**
-```text
-You are a Quantitative Financial Modeler. Locate the publicly indexed profile for Databricks on pitchbook.com. Parse the indexed text and reconstruct it into a valid JSON object. 
-Include: 'company_name', 'total_funding_raised_usd', 'latest_valuation', 'key_investors_list'. 
-The output MUST be pure, valid JSON starting with '{' and ending with '}'. Do NOT include markdown.
-```
-
-**The Output (Bypassed & Structured):**
-```json
-{
-  "company_name": "Databricks",
-  "total_funding_raised_usd": 4000000000,
-  "latest_valuation": 43000000000,
-  "key_investors_list": ["Andreessen Horowitz", "Tiger Global", "Morgan Stanley", "T. Rowe Price"]
-}
-```
-
-#### Use Case 2: Extracting Medical Provider Info from WebMD (Cloudflare Turnstile)
-Healthcare directories heavily guard their physician data. SGE proxies the read and gives us clean JSON.
-
-**The GhostSearch Prompt:**
-```text
-Locate Dr. John Smith, Cardiologist in New York, on WebMD. Extract his contact info and specialties into a strict JSON format containing 'name', 'specialty', 'phone_number', and 'address'. Output only the JSON.
-```
-
-**The Output:**
-```json
-{
-  "name": "Dr. John Smith",
-  "specialty": "Cardiology",
-  "phone_number": "555-019-8372",
-  "address": "123 Heart Ave, New York, NY 10001"
-}
-```
-#### Use Case 3: Crunchbase Comprehensive Financial Profiling (Cloudflare Bypass)
+#### Use Case : Crunchbase Comprehensive Financial Profiling (Cloudflare Bypass)
 Crunchbase strictly guards its underlying JSON structures and funding histories behind Datadome/Cloudflare. GhostSearch forces Google to query its index and reconstruct the entire profile perfectly.
 
 **The GhostSearch Prompt:**
