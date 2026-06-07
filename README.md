@@ -24,14 +24,7 @@
 
 > **"Perplexity gives humans answers. UltraSearch gives systems data."**
 
-### 👻 Meet Cipher, The Netrunner's Ghost
-*Before there was UltraSearch, there was only noise—WAF blocks, CAPTCHAs, and rate limits. Then came Cipher.*
 
-Cipher is the digital ghost in the machine. Born out of the necessity to bypass the deepest enterprise firewalls without triggering alarms, Cipher doesn't break down doors; it walks through the walls. As the mascot and operational ethos of UltraSearch, Cipher represents our core capability: **GhostSearching**. By possessing whitelisted crawlers like Googlebot, Cipher forces SGE to parse, structure, and exfiltrate paywalled data silently into pure JSON. 
-
-When you see Cipher on your terminal, it means your payload has bypassed the security grid. You are a Netrunner now.
-
-***
 
 Modern web search engines are designed for human reading, returning blue links (Google) or conversational prose (Perplexity, ChatGPT Search). For automated data pipelines and AI agents, conversational text is highly inefficient, forcing systems to spend processing time and token budget parsing and structuring sentences back into databases. 
 
