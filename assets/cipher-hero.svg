@@ -1,12 +1,12 @@
 <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" width="150" height="150">
   <defs>
     <linearGradient id="headerGhostGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stopColor="#e0e7ff" />
-      <stop offset="100%" stopColor="#818cf8" />
+      <stop offset="0%" stop-color="#e0e7ff" />
+      <stop offset="100%" stop-color="#818cf8" />
     </linearGradient>
     <linearGradient id="headerGlassGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.6" />
-      <stop offset="100%" stopColor="#0284c7" stopOpacity="0.2" />
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0.2" />
     </linearGradient>
   </defs>
   
@@ -14,7 +14,7 @@
   <path d="M 25 60 C 25 15, 95 15, 95 60 V 95 L 85 85 L 75 95 L 60 85 L 45 95 L 35 85 L 25 95 Z" fill="url(#headerGhostGrad)" />
   
   <!-- Left Arm (Waving position) -->
-  <path d="M 25 70 Q 10 65 18 50" fill="none" stroke="url(#headerGhostGrad)" strokeWidth="10" strokeLinecap="round" />
+  <path d="M 25 70 Q 10 65 18 50" fill="none" stroke="url(#headerGhostGrad)" stroke-width="10" stroke-linecap="round" />
   
   <!-- Cheeks -->
   <ellipse cx="38" cy="58" rx="5" ry="3" fill="#f43f5e" opacity="0.4" />
@@ -33,13 +33,13 @@
   </g>
   
   <!-- Cute Smile -->
-  <path d="M 56 56 Q 60 62 64 56" fill="none" stroke="#1e1b4b" strokeWidth="2.5" strokeLinecap="round" />
+  <path d="M 56 56 Q 60 62 64 56" fill="none" stroke="#1e1b4b" stroke-width="2.5" stroke-linecap="round" />
   
   <!-- Magnifying Glass Assembly -->
   <g>
-    <line x1="94" y1="64" x2="110" y2="80" stroke="#475569" strokeWidth="7" strokeLinecap="round" />
-    <circle cx="84" cy="54" r="14" fill="url(#headerGlassGrad)" stroke="#94a3b8" strokeWidth="4" />
-    <path d="M 76 48 A 8 8 0 0 1 88 46" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
-    <path d="M 88 70 Q 104 76 102 72" fill="none" stroke="#818cf8" strokeWidth="8" strokeLinecap="round" />
+    <line x1="94" y1="64" x2="110" y2="80" stroke="#475569" stroke-width="7" stroke-linecap="round" />
+    <circle cx="84" cy="54" r="14" fill="url(#headerGlassGrad)" stroke="#94a3b8" stroke-width="4" />
+    <path d="M 76 48 A 8 8 0 0 1 88 46" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.8" />
+    <path d="M 88 70 Q 104 76 102 72" fill="none" stroke="#818cf8" stroke-width="8" stroke-linecap="round" />
   </g>
 </svg>
